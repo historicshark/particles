@@ -24,9 +24,9 @@
 // #   define WALL_(...)
 // #endif
 
-inline auto sum(auto... ts)
-{
-    return (... + ts);
-}
+// inline auto sum(auto... ts)
+// {
+    // return (... + ts);
+// }
 
-inline auto sum() {return 0.0;}
+// inline auto sum() {return 0.0;}

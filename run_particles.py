@@ -4,6 +4,7 @@ import matplotlib.animation as animation
 import numpy as np
 import pandas as pd
 from pathlib import Path
+import platform
 import subprocess
 import sys
 
@@ -85,7 +86,13 @@ def main():
     position_file = cwd.joinpath('position.csv')
     velocity_file = cwd.joinpath('velocity.csv')
     
-    command = ['main.exe', domain_file, particle_file, time_file, position_file, velocity_file]
+    command = []
+    if platform.system() == 'Darwin':
+        command.append('./particles')
+    else:
+        command.append('main.exe')
+    for x in [domain_file, particle_file, time_file, position_file, velocity_file]:
+        command.append(x)
     
     parameters = [gx, gy, mu_l, rho_l, epsilon, xmin, xmax, ymin, ymax, dt, end_time, str(drag), str(gravity), str(walls)]
     

@@ -6,3 +6,9 @@ time.csv
 velocity.csv
 .vscode/settings.json
 .vscode/tasks.json
+particles
+particles.xcodeproj/project.pbxproj
+particles.xcodeproj/project.xcworkspace/contents.xcworkspacedata
+particles.xcodeproj/project.xcworkspace/xcshareddata/IDEWorkspaceChecks.plist
+particles.xcodeproj/project.xcworkspace/xcuserdata/mschmidt.xcuserdatad/UserInterfaceState.xcuserstate
+particles.xcodeproj/xcuserdata/mschmidt.xcuserdatad/xcschemes/xcschememanagement.plist

@@ -10,7 +10,7 @@ void Particle::set_fluid_properties(double rho, double mu)
     mu_l = mu;
 }
 
-void Particle::update_reynolds_number(Vector u_p, double rho_l, double mu_l, Vector v_l = {0,0})
+void Particle::update_reynolds_number(Vector u_p)
 {
     re = rho_l * (u_p - v_l).norm() * diameter() / mu_l;
 }
@@ -27,13 +27,13 @@ auto Particle::drag_coefficient()
     }
 };
 
-auto Particle::drag_force(Vector u_p, double rho_l, double mu_l, Vector v_l = {0,0})
+auto Particle::drag_force(Vector u_p)
 {
-    update_reynolds_number(u_p, rho_l, mu_l, v_l);
+    update_reynolds_number(u_p);
     return 1.0 / 2.0 * rho_l / rho * (v_l - u_p).norm() * (v_l - u_p) * area_xs() / volume() * drag_coefficient();
 };
 
-auto Particle::buoyancy_force(double rho_l, Vector g = {0, -9.81})
+auto Particle::buoyancy_force(Vector g = {0, -9.81})
 {
     return (rho - rho_l) / rho * g;
 }
@@ -54,19 +54,23 @@ auto Particle::wall_contact_force(const double dt, double epsilon, std::vector<d
     return Vector{fx, fy};
 }
 
+auto Particle::detect_collision(Particle& other, double dt)
+{
+    
+}
+
 auto Particle::apply_forces(Vector u_p,
                             double dt,
                             std::vector<double> walls,
                             double epsilon,
-                            Vector v_l,
                             Vector g,
                             bool drag,
                             bool grav,
                             bool wall)
 {
     Vector force;
-    if (drag) { force += drag_force(u_p, rho_l, mu_l, v_l); }
-    if (grav) { force += buoyancy_force(rho_l, g); }
+    if (drag) { force += drag_force(u_p); }
+    if (grav) { force += buoyancy_force(g); }
     if (wall) { force += wall_contact_force(dt, epsilon, walls); }
     return force;
 }
@@ -74,16 +78,15 @@ auto Particle::apply_forces(Vector u_p,
 void Particle::update(double dt,
                       std::vector<double> walls,
                       double epsilon,
-                      Vector v_l,
                       Vector g,
                       bool drag,
                       bool grav,
                       bool wall)
 {
-    auto k1 = apply_forces(u_n,                 dt, walls, epsilon, v_l, g, drag, grav, wall);
-    auto k2 = apply_forces(u_n + dt / 2.0 * k1, dt, walls, epsilon, v_l, g, drag, grav, wall);
-    auto k3 = apply_forces(u_n + dt / 2.0 * k2, dt, walls, epsilon, v_l, g, drag, grav, wall);
-    auto k4 = apply_forces(u_n + dt * k3,       dt, walls, epsilon, v_l, g, drag, grav, wall);
+    auto k1 = apply_forces(u_n,                 dt, walls, epsilon, g, drag, grav, wall);
+    auto k2 = apply_forces(u_n + dt / 2.0 * k1, dt, walls, epsilon, g, drag, grav, wall);
+    auto k3 = apply_forces(u_n + dt / 2.0 * k2, dt, walls, epsilon, g, drag, grav, wall);
+    auto k4 = apply_forces(u_n + dt * k3,       dt, walls, epsilon, g, drag, grav, wall);
     
     u = u_n + dt / 6.0 * (k1 + 2*k2 + 2*k3 + k4);
     

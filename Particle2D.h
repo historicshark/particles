@@ -7,6 +7,7 @@
 #include <numbers>
 
 #include "define.h"
+#include "Vector2D.h"
 
 class Particle
 {
@@ -25,6 +26,7 @@ class Particle
     
     double rho_l;
     double mu_l;
+    Vector v_l;
     
     double re;
         
@@ -89,18 +91,19 @@ class Particle
     auto distance(Particle other);
     auto distance(Vector other);
     void set_fluid_properties(double rho, double mu);
-    void update_reynolds_number(Vector u_p, double rho_l, double mu_l, Vector v_l);
+    void set_fluid_velocity(Vector v) { v_l = v; };
+    void update_reynolds_number(Vector u_p);
     auto reynolds_number() { return re; };
     auto drag_coefficient();
-    auto drag_force(Vector u_p, double rho_l, double mu_l, Vector v_l);
-    auto buoyancy_force(double rho_l, Vector g);
+    auto drag_force(Vector u_p);
+    auto buoyancy_force(Vector g);
     auto wall_contact_force(const double dt, double epsilon, std::vector<double> walls);
+    auto detect_collision(Particle& other, double dt);
     // auto collision_force();
     auto apply_forces(Vector u_p, 
                       double dt,
                       std::vector<double> walls,
                       double epsilon,
-                      Vector v_l,
                       Vector g,
                       bool drag,
                       bool grav,
@@ -108,7 +111,6 @@ class Particle
     void update(double dt,
                 std::vector<double> walls,
                 double epsilon,
-                Vector v_l,
                 Vector g,
                 bool drag,
                 bool grav,

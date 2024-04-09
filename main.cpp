@@ -62,6 +62,7 @@ int main(int argc, char* argv[])
                 }
                 Particle p = {in};
                 p.set_fluid_properties(rho_l, mu_l);
+                p.set_fluid_velocity(v_l);
                 particles.push_back(p);
             }
         }
@@ -76,7 +77,7 @@ int main(int argc, char* argv[])
         time_file << t << "\n";
         for (auto& particle : particles)
         {
-            particle.update(dt, walls, epsilon, v_l, g, drag, grav, wall);
+            particle.update(dt, walls, epsilon, g, drag, grav, wall);
             position_file << particle.position_string() << ",";
             velocity_file << particle.velocity_string() << ",";
         }

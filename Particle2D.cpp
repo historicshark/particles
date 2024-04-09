@@ -4,6 +4,12 @@ auto Particle::distance_vector(Vector other) { return other - x; }
 auto Particle::distance(Particle other) { return distance_vector(other).norm(); }
 auto Particle::distance(Vector other) { return distance_vector(other).norm(); }
 
+void Particle::set_fluid_properties(double rho, double mu)
+{
+    rho_l = rho;
+    mu_l = mu;
+}
+
 void Particle::update_reynolds_number(Vector u_p, double rho_l, double mu_l, Vector v_l = {0,0})
 {
     re = rho_l * (u_p - v_l).norm() * diameter() / mu_l;
@@ -34,7 +40,7 @@ auto Particle::buoyancy_force(double rho_l, Vector g = {0, -9.81})
 
 auto Particle::wall_contact_force(const double dt, double epsilon, std::vector<double> walls)
 {
-    double fx, fy;
+    double fx = 0, fy = 0;
     
     if(r > distance({walls[0],x[1]}) || r > distance({walls[1],x[1]}))
     {

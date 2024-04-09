@@ -22,10 +22,14 @@ class Particle
     
     double r;
     double rho;
+    
+    double rho_l;
+    double mu_l;
+    
     double re;
         
     public:
-    Particle(int id, double r, double rho, double x, double y, double u = 0, double v = 0)
+    Particle(int id, double r, double rho, double x, double y, double u, double v, double rho_l, double mu_l)
     : id(id)
     , r(r)
     , rho(rho)
@@ -33,9 +37,11 @@ class Particle
     , u({u,v})
     , x_n({x,y})
     , u_n({u,v})
+    , rho_l(rho_l)
+    , mu_l(mu_l)
     {};
     
-    Particle(int id, double r, double rho, Vector x, Vector u = {0,0})
+    Particle(int id, double r, double rho, Vector x, Vector u, double rho_l, double mu_l)
     : id(id)
     , r(r)
     , rho(rho)
@@ -43,6 +49,8 @@ class Particle
     , u(u)
     , x_n(x)
     , u_n(u)
+    , rho_l(rho_l)
+    , mu_l(mu_l)
     {};
     
     Particle(std::array<std::string,7> line)
@@ -80,6 +88,7 @@ class Particle
     auto distance_vector(Vector other);
     auto distance(Particle other);
     auto distance(Vector other);
+    void set_fluid_properties(double rho, double mu);
     void update_reynolds_number(Vector u_p, double rho_l, double mu_l, Vector v_l);
     auto reynolds_number() { return re; };
     auto drag_coefficient();

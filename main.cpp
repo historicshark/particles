@@ -55,13 +55,14 @@ int main(int argc, char* argv[])
                 std::array<std::string, 7> in;
                 std::stringstream ss(line);
                 std::string entry;
-                int i = 0;
                 for (int i = 0; i != 7; i++)
                 {
                     std::getline(ss, entry, ',');
                     in[i] = entry;
                 }
-                particles.push_back({in});
+                Particle p = {in};
+                p.set_fluid_properties(rho_l, mu_l);
+                particles.push_back(p);
             }
         }
     }

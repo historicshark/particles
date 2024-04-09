@@ -76,7 +76,7 @@ int main(int argc, char* argv[])
         time_file << t << "\n";
         for (auto& particle : particles)
         {
-            particle.update(dt, rho_l, mu_l, walls, epsilon, v_l, g, drag, grav, wall);
+            particle.update(dt, walls, epsilon, v_l, g, drag, grav, wall);
             position_file << particle.position_string() << ",";
             velocity_file << particle.velocity_string() << ",";
         }

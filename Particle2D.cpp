@@ -54,12 +54,10 @@ auto Particle::wall_contact_force(const double dt, double epsilon, std::vector<d
     return Vector{fx, fy};
 }
 
-auto Particle::apply_forces(Vector u_p, 
-                            double dt, 
-                            double rho_l, 
-                            double mu_l, 
-                            std::vector<double> walls, 
-                            double epsilon, 
+auto Particle::apply_forces(Vector u_p,
+                            double dt,
+                            std::vector<double> walls,
+                            double epsilon,
                             Vector v_l,
                             Vector g,
                             bool drag,
@@ -73,21 +71,19 @@ auto Particle::apply_forces(Vector u_p,
     return force;
 }
 
-void Particle::update(double dt, 
-                      double rho_l, 
-                      double mu_l, 
-                      std::vector<double> walls, 
+void Particle::update(double dt,
+                      std::vector<double> walls,
                       double epsilon,
-                      Vector v_l, 
+                      Vector v_l,
                       Vector g,
                       bool drag,
                       bool grav,
                       bool wall)
 {
-    auto k1 = apply_forces(u_n,                 dt, rho_l, mu_l, walls, epsilon, v_l, g, drag, grav, wall);
-    auto k2 = apply_forces(u_n + dt / 2.0 * k1, dt, rho_l, mu_l, walls, epsilon, v_l, g, drag, grav, wall);
-    auto k3 = apply_forces(u_n + dt / 2.0 * k2, dt, rho_l, mu_l, walls, epsilon, v_l, g, drag, grav, wall);
-    auto k4 = apply_forces(u_n + dt * k3,       dt, rho_l, mu_l, walls, epsilon, v_l, g, drag, grav, wall);
+    auto k1 = apply_forces(u_n,                 dt, walls, epsilon, v_l, g, drag, grav, wall);
+    auto k2 = apply_forces(u_n + dt / 2.0 * k1, dt, walls, epsilon, v_l, g, drag, grav, wall);
+    auto k3 = apply_forces(u_n + dt / 2.0 * k2, dt, walls, epsilon, v_l, g, drag, grav, wall);
+    auto k4 = apply_forces(u_n + dt * k3,       dt, walls, epsilon, v_l, g, drag, grav, wall);
     
     u = u_n + dt / 6.0 * (k1 + 2*k2 + 2*k3 + k4);
     

@@ -91,6 +91,10 @@ def main():
     position_file = cwd.joinpath('position.csv')
     velocity_file = cwd.joinpath('velocity.csv')
     
+    time_file.unlink(missing_ok=True)
+    position_file.unlink(missing_ok=True)
+    velocity_file.unlink(missing_ok=True)
+    
     command = []
     if platform.system() == 'Darwin':
         command.append('./particles_xcode')

@@ -60,12 +60,22 @@ auto Particle::time_to_collision(Particle& other)
     auto b = 2 * ((other.velocity_prev(0) - velocity_prev(0)) * (other.position_prev(0) - position_prev(0)) + (other.velocity_prev(1) - velocity_prev(1)) * (other.position_prev(1) - position_prev(1)));
     auto c = (position_prev() - other.position_prev()).norm_squared() - std::pow(radius() + other.radius(), 2);
     
-    auto disc = std::pow(b,2) - 4 * a * c;
-    if (disc > 0)
+    auto t1 = (-b + std::sqrt(b*b - 4 * a * c)) / (2 * a);
+    auto t2 = (-b - std::sqrt(b*b - 4 * a * c)) / (2 * a);
+    
+    if (t1 > 0 && t2 > 0)
     {
-        return (-b - std::sqrt(disc)) / (2 * a);
+        if (t1 > t2)
+        {
+            return t2;
+        }
+        return t1;
     }
-    return -1.0;
+    else if (t1 > 0)
+    {
+        return t1;
+    }
+    return t2;
 }
 
 void Particle::collision_force(Particle& other, double dt, double epsilon)

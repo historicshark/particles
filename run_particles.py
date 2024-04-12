@@ -97,7 +97,10 @@ def main():
     
     command = []
     if platform.system() == 'Darwin':
-        command.append('./particles_xcode')
+        command.append('./main')
+        executable = cwd.joinpath('main')
+        executable.unlink(missing_ok=True)
+        executable.symlink_to('/Users/mschmidt/Library/Developer/Xcode/DerivedData/particles_xcode-ewvadkdtekwkuzgyselujxvcctby/Build/Products/Debug/particles_xcode')
     else:
         command.append('main.exe')
     for x in [domain_file, particle_file, time_file, position_file, velocity_file]:

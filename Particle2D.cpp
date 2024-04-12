@@ -1,7 +1,7 @@
-auto Particle::distance_vector(Particle other) { return other.x - x; }
-auto Particle::distance_vector(Vector other) { return other - x; }
+auto Particle::distance_vector(Particle& other) { return other.position() - position(); }
+auto Particle::distance_vector(Vector other) { return other - position(); }
 
-auto Particle::distance(Particle other) { return distance_vector(other).norm(); }
+auto Particle::distance(Particle& other) { return distance_vector(other).norm(); }
 auto Particle::distance(Vector other) { return distance_vector(other).norm(); }
 
 void Particle::set_fluid_properties(double rho, double mu)
@@ -54,9 +54,25 @@ auto Particle::wall_contact_force(const double dt, double epsilon, std::vector<d
     return Vector{fx, fy};
 }
 
-auto Particle::detect_collision(Particle& other, double dt)
+auto Particle::time_to_collision(Particle& other)
 {
+    auto a = (velocity_prev() - other.velocity_prev()).norm_squared();
+    auto b = 2 * ((other.velocity_prev(0) - velocity_prev(0)) * (other.position_prev(0) - position_prev(0)) + (other.velocity_prev(1) - velocity_prev(1)) * (other.position_prev(1) - position_prev(1)));
+    auto c = (position_prev() - other.position_prev()).norm_squared() - std::pow(radius() + other.radius(), 2);
     
+    auto disc = std::pow(b,2) - 4 * a * c;
+    if (disc > 0)
+    {
+        return (-b - std::sqrt(disc)) / (2 * a);
+    }
+    return -1.0;
+}
+
+void Particle::collision_force(Particle& other, double dt, double epsilon)
+{
+    auto n = (other.position() - position()) / (other.position() - position()).norm();
+    auto u_prime = u + n * dot(other.velocity() - velocity(), n) * (1 + epsilon) * other.mass() / (other.mass() + mass());
+    f_collision = (u_prime - u) / dt;
 }
 
 auto Particle::apply_forces(Vector u_p,
@@ -66,32 +82,55 @@ auto Particle::apply_forces(Vector u_p,
                             Vector g,
                             bool drag,
                             bool grav,
-                            bool wall)
+                            bool wall,
+                            bool collision)
 {
     Vector force;
     if (drag) { force += drag_force(u_p); }
     if (grav) { force += buoyancy_force(g); }
     if (wall) { force += wall_contact_force(dt, epsilon, walls); }
+    if (collision) { force += f_collision; }
     return force;
 }
 
-void Particle::update(double dt,
-                      std::vector<double> walls,
-                      double epsilon,
-                      Vector g,
-                      bool drag,
-                      bool grav,
-                      bool wall)
+void Particle::integrate(double dt,
+                         std::vector<double> walls,
+                         double epsilon,
+                         Vector g,
+                         bool drag,
+                         bool grav,
+                         bool wall,
+                         bool collision /* = false */)
 {
-    auto k1 = apply_forces(u_n,                 dt, walls, epsilon, g, drag, grav, wall);
-    auto k2 = apply_forces(u_n + dt / 2.0 * k1, dt, walls, epsilon, g, drag, grav, wall);
-    auto k3 = apply_forces(u_n + dt / 2.0 * k2, dt, walls, epsilon, g, drag, grav, wall);
-    auto k4 = apply_forces(u_n + dt * k3,       dt, walls, epsilon, g, drag, grav, wall);
+    // fix apply u and x simultaneously
+    auto k1 = apply_forces(u_n,                 dt, walls, epsilon, g, drag, grav, wall, collision);
+//    auto k2 = apply_forces(u_n + dt / 2.0 * k1, dt, walls, epsilon, g, drag, grav, wall, collision);
+//    auto k3 = apply_forces(u_n + dt / 2.0 * k2, dt, walls, epsilon, g, drag, grav, wall, collision);
+//    auto k4 = apply_forces(u_n + dt * k3,       dt, walls, epsilon, g, drag, grav, wall, collision);
     
-    u = u_n + dt / 6.0 * (k1 + 2*k2 + 2*k3 + k4);
+//    u = u_n + dt / 6.0 * (k1 + 2*k2 + 2*k3 + k4);
+//
+//    x = x_n + (dt + std::pow(dt,2) / 2 + std::pow(dt,3) / 6 + std::pow(dt,4) / 24) * u;
     
-    x = x_n + (dt + std::pow(dt,2) / 2 + std::pow(dt,3) / 6 + std::pow(dt,4) / 24) * u;
-    
+    u = u_n + dt * k1;
+    x = x_n + dt * u;
+}
+
+void Particle::update()
+{
     x_n = x;
     u_n = u;
 };
+
+void Particle::integrate_update(double dt,
+                                std::vector<double> walls,
+                                double epsilon,
+                                Vector g,
+                                bool drag,
+                                bool grav,
+                                bool wall,
+                                bool collision /* = false */)
+{
+    integrate(dt, walls, epsilon, g, drag, grav, wall, collision);
+    update();
+}

@@ -29,6 +29,9 @@ class Particle
     Vector v_l;
     
     double re;
+    
+    Vector f_collision;
+    bool collision_done;
         
     public:
     Particle(int id, double r, double rho, double x, double y, double u, double v, double rho_l, double mu_l)
@@ -70,25 +73,45 @@ class Particle
     auto diameter() { return 2 * r; };
     auto radius() { return r; };
     auto position() { return x; };
+    auto position_prev() { return x_n; };
     auto position(const int dim)
     {
         if (dim == 0) { return x[0]; }
         else if (dim == 1) { return x[1]; }
         else { throw std::invalid_argument("ndim"); };
     }
+    auto position_prev(const int dim)
+    {
+        if (dim == 0) { return x_n[0]; }
+        else if (dim == 1) { return x_n[1]; }
+        else { throw std::invalid_argument("ndim"); };
+    }
     auto velocity() { return u; };
+    auto velocity_prev() { return u_n; };
     auto velocity(const int dim)
     {
         if (dim == 0) { return u[0]; }
         else if (dim == 1) { return u[1]; }
         else { throw std::invalid_argument("ndim"); };
     }
+    auto velocity_prev(const int dim)
+    {
+        if (dim == 0) { return u_n[0]; }
+        else if (dim == 1) { return u_n[1]; }
+        else { throw std::invalid_argument("ndim"); };
+    }
     auto volume() { return 4./3. * std::numbers::pi * pow(r, 3); };
     auto area_xs() { return std::numbers::pi * pow(r, 2); };
+    auto mass() { return rho * volume(); };
+    auto collided() { return collision_done; };
+    void set_colllided(bool a) { collision_done = a; };
     
-    auto distance_vector(Particle other);
+    bool operator==(Particle& other) { return get_id() == other.get_id(); };
+    bool operator!=(Particle& other) { return get_id() != other.get_id(); };
+    
+    auto distance_vector(Particle& other);
     auto distance_vector(Vector other);
-    auto distance(Particle other);
+    auto distance(Particle& other);
     auto distance(Vector other);
     void set_fluid_properties(double rho, double mu);
     void set_fluid_velocity(Vector v) { v_l = v; };
@@ -98,8 +121,8 @@ class Particle
     auto drag_force(Vector u_p);
     auto buoyancy_force(Vector g);
     auto wall_contact_force(const double dt, double epsilon, std::vector<double> walls);
-    auto detect_collision(Particle& other, double dt);
-    // auto collision_force();
+    auto time_to_collision(Particle& other);
+    void collision_force(Particle& other, double dt, double epsilon);
     auto apply_forces(Vector u_p, 
                       double dt,
                       std::vector<double> walls,
@@ -107,14 +130,25 @@ class Particle
                       Vector g,
                       bool drag,
                       bool grav,
-                      bool wall);
-    void update(double dt,
-                std::vector<double> walls,
-                double epsilon,
-                Vector g,
-                bool drag,
-                bool grav,
-                bool wall);
+                      bool wall,
+                      bool collision);
+    void integrate(double dt,
+                   std::vector<double> walls,
+                   double epsilon,
+                   Vector g,
+                   bool drag,
+                   bool grav,
+                   bool wall,
+                   bool collision=false);
+    void update();
+    void integrate_update(double dt,
+                          std::vector<double> walls,
+                          double epsilon,
+                          Vector g,
+                          bool drag,
+                          bool grav,
+                          bool wall,
+                          bool collision=false);
     auto position_string() { return x.string(); };
     auto velocity_string() { return u.string(); };
 };

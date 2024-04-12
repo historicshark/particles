@@ -72,12 +72,76 @@ int main(int argc, char* argv[])
     std::ofstream position_file(position_filepath);
     std::ofstream velocity_file(velocity_filepath);
     
+    double substeps = 10;
+    
     for (double t = 0; t < end_time; t += dt)
     {
         time_file << t << "\n";
+        
+        // Reset collision flag
+        std::for_each(particles.begin(), particles.end(), [](Particle& p){p.set_colllided(false);});
+        
         for (auto& particle : particles)
         {
-            particle.update(dt, walls, epsilon, g, drag, grav, wall);
+            if (!particle.collided())
+            {
+                // Calculate next position
+                particle.integrate(dt, walls, epsilon, g, drag, grav, wall);
+                
+                // Check to see if particle has collided with any other particle
+                for (auto& other : particles)
+                {
+                    if (particle != other && !other.collided())
+                    {
+                        other.integrate(dt, walls, epsilon, g, drag, grav, wall);
+                        
+                        if (particle.distance(other) < particle.radius() + other.radius())
+                        {
+                            double t_collision = particle.time_to_collision(other);
+                            
+                            assert(t_collision > 0);
+                            assert(t_collision < dt);
+                            
+                            // Integrate up to collision
+                            double dt_before_collision = t_collision / substeps;
+                            double dt_after_collision = (dt - t_collision) / substeps;
+                            
+                            for (int i = 0; i != substeps; i++)
+                            {
+                                particle.integrate_update(dt_before_collision, walls, epsilon, g, drag, grav, wall);
+                                other.integrate_update(dt_before_collision, walls, epsilon, g, drag, grav, wall);
+                            }
+                            
+                            // Calculate collsion force
+                            particle.collision_force(other, dt_after_collision, epsilon);
+                            other.collision_force(particle, dt_after_collision, epsilon);
+                            
+                            // Integrate once applying collision force
+                            particle.integrate_update(dt_after_collision, walls, epsilon, g, drag, grav, wall, true);
+                            other.integrate_update(dt_after_collision, walls, epsilon, g, drag, grav, wall, true);
+                            
+                            // integrate for the rest of the time step
+                            for (int i = 1; i != substeps; i++)
+                            {
+                                particle.integrate_update(dt_after_collision, walls, epsilon, g, drag, grav, wall);
+                                other.integrate_update(dt_after_collision, walls, epsilon, g, drag, grav, wall);
+                            }
+                            
+                            // These two particles have integrated through dt so do not integrate them again
+                            particle.set_colllided(true);
+                            other.set_colllided(true);
+                        }
+                    }
+                }
+                
+                if (!particle.collided())
+                {
+                    particle.update();
+                }
+            }
+            
+            particle.update();
+            
             position_file << particle.position_string() << ",";
             velocity_file << particle.velocity_string() << ",";
         }

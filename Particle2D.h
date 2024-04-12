@@ -30,7 +30,7 @@ class Particle
     
     double re;
     
-    Vector f_collision;
+    Vector a_collision;
     bool collision_done;
         
     public:
@@ -118,12 +118,12 @@ class Particle
     void update_reynolds_number(Vector u_p);
     auto reynolds_number() { return re; };
     auto drag_coefficient();
-    auto drag_force(Vector u_p);
-    auto buoyancy_force(Vector g);
-    auto wall_contact_force(const double dt, double epsilon, std::vector<double> walls);
+    auto drag_acceleration(Vector u_p);
+    auto buoyancy_acceleration(Vector g);
+    auto wall_contact_acceleration(const double dt, double epsilon, std::vector<double> walls);
     auto time_to_collision(Particle& other);
-    void collision_force(Particle& other, double dt, double epsilon);
-    auto apply_forces(Vector u_p, 
+    void collision_acceleration(Particle& other, double dt, double epsilon);
+    auto apply_accelerations(Vector u_p, 
                       double dt,
                       std::vector<double> walls,
                       double epsilon,

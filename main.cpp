@@ -112,8 +112,8 @@ int main(int argc, char* argv[])
                             
                             double dt_substep_after_collision = (dt - time_before_collision);
                             
-                            particle.collision_force(other, dt_substep_after_collision, epsilon);
-                            other.collision_force(particle, dt_substep_after_collision, epsilon);
+                            particle.collision_acceleration(other, dt_substep_after_collision, epsilon);
+                            other.collision_acceleration(particle, dt_substep_after_collision, epsilon);
                             
                             particle.integrate_update(dt_substep_after_collision, walls, epsilon, g, drag, grav, wall, /* collision = */ true);
                             other.integrate_update(dt_substep_after_collision, walls, epsilon, g, drag, grav, wall, /* collision = */ true);

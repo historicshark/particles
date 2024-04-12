@@ -27,18 +27,18 @@ auto Particle::drag_coefficient()
     }
 };
 
-auto Particle::drag_force(Vector u_p)
+auto Particle::drag_acceleration(Vector u_p)
 {
     update_reynolds_number(u_p);
     return 1.0 / 2.0 * rho_l / rho * (v_l - u_p).norm() * (v_l - u_p) * area_xs() / volume() * drag_coefficient();
 };
 
-auto Particle::buoyancy_force(Vector g = {0, -9.81})
+auto Particle::buoyancy_acceleration(Vector g = {0, -9.81})
 {
     return (rho - rho_l) / rho * g;
 }
 
-auto Particle::wall_contact_force(const double dt, double epsilon, std::vector<double> walls)
+auto Particle::wall_contact_acceleration(const double dt, double epsilon, std::vector<double> walls)
 {
     double fx = 0, fy = 0;
     
@@ -78,14 +78,14 @@ auto Particle::time_to_collision(Particle& other)
     return t2;
 }
 
-void Particle::collision_force(Particle& other, double dt, double epsilon)
+void Particle::collision_acceleration(Particle& other, double dt, double epsilon)
 {
     auto n = (other.position() - position()) / (other.position() - position()).norm();
     auto u_prime = u + n * dot(other.velocity() - velocity(), n) * (1 + epsilon) * other.mass() / (other.mass() + mass());
-    f_collision = (u_prime - u) / dt;
+    a_collision = (u_prime - u) / dt;
 }
 
-auto Particle::apply_forces(Vector u_p,
+auto Particle::apply_accelerations(Vector u_p,
                             double dt,
                             std::vector<double> walls,
                             double epsilon,
@@ -95,12 +95,12 @@ auto Particle::apply_forces(Vector u_p,
                             bool wall,
                             bool collision)
 {
-    Vector force;
-    if (drag) { force += drag_force(u_p); }
-    if (grav) { force += buoyancy_force(g); }
-    if (wall) { force += wall_contact_force(dt, epsilon, walls); }
-    if (collision) { force += f_collision; }
-    return force;
+    Vector acceleration;
+    if (drag) { acceleration += drag_acceleration(u_p); }
+    if (grav) { acceleration += buoyancy_acceleration(g); }
+    if (wall) { acceleration += wall_contact_acceleration(dt, epsilon, walls); }
+    if (collision) { acceleration += a_collision; }
+    return acceleration;
 }
 
 void Particle::integrate(double dt,
@@ -113,16 +113,16 @@ void Particle::integrate(double dt,
                          bool collision /* = false */)
 {
     // fix apply u and x simultaneously
-    auto k1 = apply_forces(u_n,                 dt, walls, epsilon, g, drag, grav, wall, collision);
-//    auto k2 = apply_forces(u_n + dt / 2.0 * k1, dt, walls, epsilon, g, drag, grav, wall, collision);
-//    auto k3 = apply_forces(u_n + dt / 2.0 * k2, dt, walls, epsilon, g, drag, grav, wall, collision);
-//    auto k4 = apply_forces(u_n + dt * k3,       dt, walls, epsilon, g, drag, grav, wall, collision);
+    auto a1 = apply_accelerations(u_n,                 dt, walls, epsilon, g, drag, grav, wall, collision);
+//    auto a2 = apply_accelerations(u_n + dt / 2.0 * a1, dt, walls, epsilon, g, drag, grav, wall, collision);
+//    auto a3 = apply_accelerations(u_n + dt / 2.0 * a2, dt, walls, epsilon, g, drag, grav, wall, collision);
+//    auto a4 = apply_accelerations(u_n + dt * a3,       dt, walls, epsilon, g, drag, grav, wall, collision);
     
-//    u = u_n + dt / 6.0 * (k1 + 2*k2 + 2*k3 + k4);
+//    u = u_n + dt / 6.0 * (a1 + 2*a2 + 2*a3 + a4);
 //
 //    x = x_n + (dt + std::pow(dt,2) / 2 + std::pow(dt,3) / 6 + std::pow(dt,4) / 24) * u;
     
-    u = u_n + dt * k1;
+    u = u_n + dt * a1;
     x = x_n + dt * u;
 }
 

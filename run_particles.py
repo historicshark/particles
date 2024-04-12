@@ -20,7 +20,7 @@ def main():
     rho_l = 1
     
     # Particles
-    n_particles = 10
+    n_particles = 3
     
     diameter = 5
     diameter_stddev = .5
@@ -48,23 +48,28 @@ def main():
     
     # Time
     dt = 0.001
-    end_time = 20
-    n_frames = 200
+    end_time = 100
+    n_frames = 800
     save_animation = False
     
     # --------------------------------------------
     # Particles
     # --------------------------------------------
-    rng = np.random.default_rng()
-    rp = rng.normal(diameter/2, diameter_stddev/2, (n_particles,))
-    rp[rp < diameter_min/2] = diameter_min/2
-    
-    middle = 0.9
-    x0 = middle * ((xmax - xmin) * rng.random((n_particles,)) - (xmax - xmin) / 2)
-    y0 = middle * ((ymax - ymin) * rng.random((n_particles,)) - (ymax - ymin) / 2)
-    
-    u0 = rng.normal(velocity, velocity_stddev, (n_particles,))
-    v0 = rng.normal(velocity, velocity_stddev, (n_particles,))
+    rp = np.full((n_particles,), 10)
+    x0 = np.array([50, -50, 0])
+    y0 = np.array([0,0, 0])
+    u0 = np.array([-15,15,10])
+    v0 = np.array([0,0,1])
+#    rng = np.random.default_rng()
+#    rp = rng.normal(diameter/2, diameter_stddev/2, (n_particles,))
+#    rp[rp < diameter_min/2] = diameter_min/2
+#
+#    middle = 0.9
+#    x0 = middle * ((xmax - xmin) * rng.random((n_particles,)) - (xmax - xmin) / 2)
+#    y0 = middle * ((ymax - ymin) * rng.random((n_particles,)) - (ymax - ymin) / 2)
+#
+#    u0 = rng.normal(velocity, velocity_stddev, (n_particles,))
+#    v0 = rng.normal(velocity, velocity_stddev, (n_particles,))
     
     # --------------------------------------------
     # Domain
@@ -88,7 +93,7 @@ def main():
     
     command = []
     if platform.system() == 'Darwin':
-        command.append('./particles')
+        command.append('./particles_xcode')
     else:
         command.append('main.exe')
     for x in [domain_file, particle_file, time_file, position_file, velocity_file]:

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Vector2D.h"
+
 // #define DIM 2
 //
 
@@ -31,3 +33,9 @@
 // }
 
 // inline auto sum() {return 0.0;}
+
+double dot(Vector v1, Vector v2)
+{
+    auto v = v1 * v2;
+    return v[0] + v[1];
+}

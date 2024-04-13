@@ -15,6 +15,11 @@ void Particle::update_reynolds_number(Vector u_p)
     re = rho_l * (u_p - v_l).norm() * diameter() / mu_l;
 }
 
+auto Particle::kinetic_energy()
+{
+    return 0.5 * mass() * velocity().norm_squared();
+}
+
 auto Particle::drag_coefficient()
 {
     if (re > std::numeric_limits<double>::epsilon())
@@ -81,6 +86,8 @@ auto Particle::time_to_collision(Particle& other)
 void Particle::collision_acceleration(Particle& other, double dt, double epsilon)
 {
     auto n = (other.position() - position()) / (other.position() - position()).norm();
+    auto dv = dot(other.velocity() - velocity(), n);
+    auto m_ratio = other.mass() / (other.mass() + mass());
     auto u_prime = u + n * dot(other.velocity() - velocity(), n) * (1 + epsilon) * other.mass() / (other.mass() + mass());
     a_collision = (u_prime - u) / dt;
 }

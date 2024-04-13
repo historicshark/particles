@@ -19,6 +19,7 @@ int main(int argc, char* argv[])
     std::string time_filepath = argv[i_arg++];
     std::string position_filepath = argv[i_arg++];
     std::string velocity_filepath = argv[i_arg++];
+    std::string results_filepath = argv[i_arg++];
     
     double gx = std::stod(argv[i_arg++]);
     double gy = std::stod(argv[i_arg++]);
@@ -71,11 +72,23 @@ int main(int argc, char* argv[])
     std::ofstream time_file(time_filepath);
     std::ofstream position_file(position_filepath);
     std::ofstream velocity_file(velocity_filepath);
+    std::ofstream results_file(results_filepath);
+    
+    results_file << "ke\n";
     
     double dt_substeps_before_collision = dt / 10.;
+//    int n_steps = end_time / dt;
+//    int step_print = n_steps / 100;
+//    int i = 0;
+//    double time = 0;
     
     for (double t = 0; t < end_time; t += dt)
     {
+//        if (i == step_print)
+//        {
+//            std::cout << "time = " << time << std::endl;
+//            i = 0;
+//        }
         time_file << t << "\n";
         
         // Reset collision flag
@@ -95,6 +108,7 @@ int main(int argc, char* argv[])
                     {
                         other.integrate(dt, walls, epsilon, g, drag, grav, wall);
                         
+                        auto distance = particle.distance(other);
                         if (particle.distance(other) < particle.radius() + other.radius())
                         {
                             particle.integrate_update(dt_substeps_before_collision, walls, epsilon, g, drag, grav, wall);
@@ -103,11 +117,13 @@ int main(int argc, char* argv[])
                             auto min_distance = particle.radius() + other.radius();
                             double time_before_collision = 0;
                             
+                            distance = particle.distance(other);
                             while (particle.distance(other) > min_distance)
                             {
                                 particle.integrate_update(dt_substeps_before_collision, walls, epsilon, g, drag, grav, wall);
                                 other.integrate_update(dt_substeps_before_collision, walls, epsilon, g, drag, grav, wall);
                                 time_before_collision += dt_substeps_before_collision;
+                                distance = particle.distance(other);
                             }
                             
                             double dt_substep_after_collision = (dt - time_before_collision);
@@ -138,6 +154,11 @@ int main(int argc, char* argv[])
         }
         position_file << "\n";
         velocity_file << "\n";
+        
+        auto ke = std::accumulate(particles.begin(), particles.end(), 0.0, [] (double ke, Particle& particle) { return ke + particle.kinetic_energy(); });
+        results_file << ke << "\n";
+//        i++;
+//        time += dt;
     }
     time_file.close();
     position_file.close();

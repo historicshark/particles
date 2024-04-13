@@ -32,7 +32,7 @@ class Particle
     
     Vector a_collision;
     bool collision_done;
-        
+    
     public:
     Particle(int id, double r, double rho, double x, double y, double u, double v, double rho_l, double mu_l)
     : id(id)
@@ -117,6 +117,7 @@ class Particle
     void set_fluid_velocity(Vector v) { v_l = v; };
     void update_reynolds_number(Vector u_p);
     auto reynolds_number() { return re; };
+    auto kinetic_energy();
     auto drag_coefficient();
     auto drag_acceleration(Vector u_p);
     auto buoyancy_acceleration(Vector g);

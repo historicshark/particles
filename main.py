@@ -98,8 +98,8 @@ def main():
     u0 = u0[particles_to_keep]
     v0 = v0[particles_to_keep]
     
-    position = np.stack((x0,y0), axis=1)
-    velocity = np.stack((u0,v0), axis=1)
+    position = np.stack((x0, y0), axis=1)
+    velocity = np.stack((u0, v0), axis=1)
     v_l = np.zeros((2,))
     g = np.array([gx,gy])
     
@@ -163,7 +163,6 @@ def calculate(particles, walls, dt, end_time, time_filepath, position_filepath, 
                 particle.integrate_update(dt, walls)
                 
                 ke += particle.kinetic_energy()
-                
                 
                 position_file.write(particle.position_string() + ',')
                 velocity_file.write(particle.velocity_string() + ',')

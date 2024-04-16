@@ -26,3 +26,4 @@ particles_xcode.xcodeproj/xcuserdata/mschmidt.xcuserdatad/xcschemes/rm_particles
 particles_xcode.xcodeproj/xcuserdata/mschmidt.xcuserdatad/xcschemes/run_particles.xcscheme
 results.csv
 __pycache__/run_particles.cpython-311.pyc
+__pycache__/

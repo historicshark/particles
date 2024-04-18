@@ -55,7 +55,7 @@ class Vector
     
     friend Vector operator^(Vector v, double c) { return {std::pow(v.vector[0], c), std::pow(v.vector[1], c)}; };
     
-    auto& operator[](size_t i) { return vector[i]; };
+    double operator[](size_t i) { return vector[i]; };
     
     auto norm_squared() { return std::accumulate(vector.begin(), vector.end(), 0.0, [](auto a, auto x){return std::move(a) + pow(x,2);}); };
     

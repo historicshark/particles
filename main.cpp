@@ -64,6 +64,7 @@ int main(int argc, char* argv[])
                 Particle p = {in};
                 p.set_fluid_properties(rho_l, mu_l);
                 p.set_fluid_velocity(v_l);
+                p.set_gravity(g);
                 particles.push_back(p);
             }
         }
@@ -74,7 +75,7 @@ int main(int argc, char* argv[])
     std::ofstream velocity_file(velocity_filepath);
     std::ofstream results_file(results_filepath);
     
-    results_file << "ke\n";
+    results_file << "ke,pe,me\n";
     
     double dt_substeps_before_collision = dt / 10.;
 //    int n_steps = end_time / dt;
@@ -84,6 +85,7 @@ int main(int argc, char* argv[])
     
     for (double t = 0; t < end_time; t += dt)
     {
+//        std::cout << "step" << std::endl;
 //        if (i == step_print)
 //        {
 //            std::cout << "time = " << time << std::endl;
@@ -138,16 +140,20 @@ int main(int argc, char* argv[])
                             particle.set_colllided(true);
                             other.set_colllided(true);
                         }
+                        else
+                        {
+                            
+                        }
                     }
                 }
                 
-                if (!particle.collided())
-                {
-                    particle.update();
-                }
+//                if (!particle.collided())
+//                {
+//                    particle.update();
+//                }
+                
+                particle.update();
             }
-            
-            particle.update();
             
             position_file << particle.position_string() << ",";
             velocity_file << particle.velocity_string() << ",";
@@ -156,7 +162,9 @@ int main(int argc, char* argv[])
         velocity_file << "\n";
         
         auto ke = std::accumulate(particles.begin(), particles.end(), 0.0, [] (double ke, Particle& particle) { return ke + particle.kinetic_energy(); });
-        results_file << ke << "\n";
+        auto pe = std::accumulate(particles.begin(), particles.end(), 0.0, [ymin] (double pe, Particle& particle) { return pe + particle.potential_energy(ymin); });
+        auto me = std::accumulate(particles.begin(), particles.end(), 0.0, [ymin] (double me, Particle& particle) { return me + particle.mechanical_energy(ymin); });
+        results_file << ke << "," << pe << "," << me << "\n";
 //        i++;
 //        time += dt;
     }

@@ -14,26 +14,26 @@ def main():
     
     # Fluid
     gx = 0
-    gy = -9.81
+    gy = -20
     mu_l = 1
-    rho_l = 1
+    rho_l = 0
     
     # Particles
-    n_particles = 3
+    n_particles = 2
     
-    diameter = 5
+    diameter = 10
     diameter_stddev = .5
     diameter_min = 1
     
     velocity = 0
-    velocity_stddev = 15
+    velocity_stddev = 5
     
-    rho_p = 1
+    rho_p = 500
     
-    epsilon = 1
+    epsilon = .9
     
     drag = False
-    gravity = False
+    gravity = True
     walls = True
     
     # Domain
@@ -47,31 +47,31 @@ def main():
     
     # Time
     dt = 0.001
-    end_time = 20
+    end_time = 100
     n_frames = 800
     save_animation = False
     
     # --------------------------------------------
     # Particles
     # --------------------------------------------
-    # rp = np.full((n_particles,), 10)
-    # x0 = np.array([50, -50])
-    # y0 = np.array([0, 0])
-    # u0 = np.array([-15,15])
-    # v0 = np.array([0,0])
+    rp = np.full((n_particles,), 10)
+    x0 = np.array([50, -50])
+    y0 = np.array([0, 0])
+    u0 = np.array([0,0])
+    v0 = np.array([0,0])
     
-    rng = np.random.default_rng()
-    rp = rng.normal(diameter/2, diameter_stddev/2, (n_particles,))
-    rp[rp < diameter_min/2] = diameter_min/2
+    # rng = np.random.default_rng()
+    # rp = rng.normal(diameter/2, diameter_stddev/2, (n_particles,))
+    # rp[rp < diameter_min/2] = diameter_min/2
     
     rho = np.full((n_particles,), rho_p)
 
-    middle = 0.9
-    x0 = middle * ((xmax - xmin) * rng.random((n_particles,)) - (xmax - xmin) / 2)
-    y0 = middle * ((ymax - ymin) * rng.random((n_particles,)) - (ymax - ymin) / 2)
+    # middle = 0.9
+    # x0 = middle * ((xmax - xmin) * rng.random((n_particles,)) - (xmax - xmin) / 2)
+    # y0 = middle * ((ymax - ymin) * rng.random((n_particles,)) - (ymax - ymin) / 2)
 
-    u0 = rng.normal(velocity, velocity_stddev, (n_particles,))
-    v0 = rng.normal(velocity, velocity_stddev, (n_particles,))
+    # u0 = rng.normal(velocity, velocity_stddev, (n_particles,))
+    # v0 = rng.normal(velocity, velocity_stddev, (n_particles,))
     
     def distance(x1, y1, x2, y2):
         return np.sqrt((x1 - x2)**2 + (y1 - y2)**2)
@@ -135,7 +135,7 @@ def main():
     for x in [domain_file, particle_file, time_file, position_file, velocity_file, results_file]:
         command.append(x)
     
-    parameters = [gx, gy, mu_l, rho_l, epsilon, xmin, xmax, ymin, ymax, dt, end_time, str(drag), str(gravity), str(walls)]
+    parameters = [gx, gy, rho_l, mu_l, epsilon, xmin, xmax, ymin, ymax, dt, end_time, str(drag), str(gravity), str(walls)]
     
     for parameter in parameters: command.append(str(parameter))
     
@@ -171,6 +171,9 @@ def animate(time_file, position_file, velocity_file, results_file, rp, xmin, xma
     wall_y = (ymin,ymin,ymax,ymax,ymin)
     walls = ax.plot(wall_x, wall_y, '')
     
+    fig1, ax1 = plt.subplots()
+    ax1.plot(time, results['me'])
+    
     theta = np.linspace(0, 2 * np.pi)
     cos_theta = np.cos(theta)
     sin_theta = np.sin(theta)
@@ -183,15 +186,15 @@ def animate(time_file, position_file, velocity_file, results_file, rp, xmin, xma
     ax.axis('equal')
     ax.set(xlim=(xmin, xmax), ylim=(xmin,ymax))
     
-    bar, = ax_bar.barh('KE', results['ke'][0])
-    ax_bar.set_xlim(results['ke'].min(), results['ke'].max())
+    bar, = ax_bar.barh('me', results['me'][0])
+    ax_bar.set_xlim(results['me'].min(), results['me'].max())
     
     def update(frame):
         for i, (r, particle) in enumerate(zip(rp, particles)):
             x_particle, y_particle = particle_xy_plot(i, r, frame)
             particle.set_xdata(x_particle)
             particle.set_ydata(y_particle)
-        bar.set_width(results['ke'][frame])
+        bar.set_width(results['me'][frame])
         return particles
     
     n_time = len(time)
@@ -204,6 +207,14 @@ def animate(time_file, position_file, velocity_file, results_file, rp, xmin, xma
         print(f"Animation saved to '{cwd.joinpath('animation.gif')}'")
     else:
         plt.show()
+
+def factor_int(n):
+    val = int(np.ceil(np.sqrt(n)))
+    val2 = int(n/val)
+    while val2 * val != float(n):
+        val -= 1
+        val2 = int(n/val)
+    return val, val2
 
 if __name__ == "__main__":
     main()

@@ -1,8 +1,10 @@
 auto Particle::distance_vector(Particle& other) { return other.position() - position(); }
 auto Particle::distance_vector(Vector other) { return other - position(); }
+auto Particle::distance_vector_prev(Vector other) { return other - position_prev(); }
 
 auto Particle::distance(Particle& other) { return distance_vector(other).norm(); }
 auto Particle::distance(Vector other) { return distance_vector(other).norm(); }
+auto Particle::distance_prev(Vector other) { return distance_vector_prev(other).norm(); }
 
 void Particle::set_fluid_properties(double rho, double mu)
 {
@@ -15,9 +17,18 @@ void Particle::update_reynolds_number(Vector u_p)
     re = rho_l * (u_p - v_l).norm() * diameter() / mu_l;
 }
 
-auto Particle::kinetic_energy()
+double Particle::kinetic_energy()
 {
-    return 0.5 * mass() * velocity().norm_squared();
+//    auto ke =0.5 * mass() * velocity_prev().norm_squared();
+    return 0.5 * mass() * velocity_prev().norm_squared();
+}
+
+double Particle::potential_energy(double y_ref)
+{
+//    auto mass_ = mass();
+//    auto distance_ =std::abs(distance_vector_prev({0,y_ref})[1]);
+//    auto pe =mass() * -g[1] * std::abs(distance_vector({0,y_ref})[1]);
+    return mass() * -g[1] * std::abs(distance_vector({0,y_ref})[1]);
 }
 
 auto Particle::drag_coefficient()
@@ -86,8 +97,6 @@ auto Particle::time_to_collision(Particle& other)
 void Particle::collision_acceleration(Particle& other, double dt, double epsilon)
 {
     auto n = (other.position() - position()) / (other.position() - position()).norm();
-    auto dv = dot(other.velocity() - velocity(), n);
-    auto m_ratio = other.mass() / (other.mass() + mass());
     auto u_prime = u + n * dot(other.velocity() - velocity(), n) * (1 + epsilon) * other.mass() / (other.mass() + mass());
     a_collision = (u_prime - u) / dt;
 }
@@ -121,6 +130,7 @@ void Particle::integrate(double dt,
 {
     // fix apply u and x simultaneously
     auto a1 = apply_accelerations(u_n,                 dt, walls, epsilon, g, drag, grav, wall, collision);
+//    auto v1 = x_n + dt
 //    auto a2 = apply_accelerations(u_n + dt / 2.0 * a1, dt, walls, epsilon, g, drag, grav, wall, collision);
 //    auto a3 = apply_accelerations(u_n + dt / 2.0 * a2, dt, walls, epsilon, g, drag, grav, wall, collision);
 //    auto a4 = apply_accelerations(u_n + dt * a3,       dt, walls, epsilon, g, drag, grav, wall, collision);
@@ -128,13 +138,14 @@ void Particle::integrate(double dt,
 //    u = u_n + dt / 6.0 * (a1 + 2*a2 + 2*a3 + a4);
 //
 //    x = x_n + (dt + std::pow(dt,2) / 2 + std::pow(dt,3) / 6 + std::pow(dt,4) / 24) * u;
-    
+//    std::cout << "integrate " << get_id() << "\n";
     u = u_n + dt * a1;
-    x = x_n + dt * u;
+    x = x_n + dt * u_n;
 }
 
 void Particle::update()
 {
+//    std::cout << "updated " << get_id() << "\n";
     x_n = x;
     u_n = u;
 };

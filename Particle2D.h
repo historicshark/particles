@@ -27,6 +27,7 @@ class Particle
     double rho_l;
     double mu_l;
     Vector v_l;
+    Vector g;
     
     double re;
     
@@ -111,13 +112,18 @@ class Particle
     
     auto distance_vector(Particle& other);
     auto distance_vector(Vector other);
+    auto distance_vector_prev(Vector other);
     auto distance(Particle& other);
     auto distance(Vector other);
+    auto distance_prev(Vector other);
     void set_fluid_properties(double rho, double mu);
     void set_fluid_velocity(Vector v) { v_l = v; };
+    void set_gravity(Vector grav) { g = grav; };
     void update_reynolds_number(Vector u_p);
     auto reynolds_number() { return re; };
-    auto kinetic_energy();
+    double kinetic_energy();
+    double potential_energy(double y_ref);
+    double mechanical_energy(double y_ref) { return kinetic_energy() + potential_energy(y_ref); };
     auto drag_coefficient();
     auto drag_acceleration(Vector u_p);
     auto buoyancy_acceleration(Vector g);

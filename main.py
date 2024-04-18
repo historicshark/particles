@@ -1,4 +1,3 @@
-# import csv
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 import numpy as np
@@ -21,22 +20,23 @@ def main():
     rho_l = 0
 
     # Particles
-    n_particles = 2
+    n_particles = 30
 
     diameter = 10
-    diameter_stddev = 0
+    diameter_stddev = 3
     diameter_min = 1
 
     velocity = 0
-    velocity_stddev = 0
+    velocity_stddev = 20
 
     rho_p = 1
 
-    epsilon = .9
+    epsilon = .5
 
     drag = False
-    gravity = True
+    gravity = False
     wall_collisions = True
+    particle_collisions = True
 
     # Domain
     nx = 100
@@ -49,7 +49,7 @@ def main():
 
     # Time
     dt = 0.001
-    end_time = 100
+    end_time = 150
     n_frames = 800
     save_animation = False
 
@@ -58,15 +58,13 @@ def main():
     # --------------------------------------------
     # rp = np.full((n_particles,), 10)
     # x0 = np.array([50, -50])
-    # y0 = np.array([0, 0])
-    # u0 = np.array([-15,15])
-    # v0 = np.array([0,0])
+    # y0 = np.array([50, -50])
+    # u0 = np.array([-15, 15])
+    # v0 = np.array([-15, 15])
 
     rng = np.random.default_rng()
     rp = rng.normal(diameter / 2, diameter_stddev / 2, (n_particles,))
     rp[rp < diameter_min / 2] = diameter_min / 2
-
-    rho = np.full((n_particles,), rho_p)
 
     middle = 0.9
     x0 = middle * ((xmax - xmin) * rng.random((n_particles,)) - (xmax - xmin) / 2)
@@ -74,6 +72,9 @@ def main():
 
     u0 = rng.normal(velocity, velocity_stddev, (n_particles,))
     v0 = rng.normal(velocity, velocity_stddev, (n_particles,))
+
+    rho = np.full((n_particles,), rho_p)
+    # rho = np.array([rho_p, 10*rho_p])
 
     def distance(x1, y1, x2, y2):
         return np.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2)
@@ -87,7 +88,6 @@ def main():
                 if i != j:
                     if particles_to_keep[i] and particles_to_keep[j] and distance(x0[i], y0[i], x0[j], y0[j]) < rp[i] + rp[j]:
                         particles_to_keep[j] = False
-                        print(f'{i = }, {j = }')
                         n_particles_removed += 1
         n_particles -= n_particles_removed
 
@@ -111,7 +111,13 @@ def main():
     particles = []
     for i in range(n_particles):
         particles.append(
-            Particle(i, rp[i], epsilon, rho[i], position[i], velocity[i], rho_l, mu_l, v_l, g, drag, gravity, wall_collisions))
+            Particle(i, rp[i], epsilon, rho[i], position[i], velocity[i], rho_l, mu_l, v_l, g, drag, gravity, wall_collisions, particle_collisions))
+
+    particle_combinations = []
+    if particle_collisions:
+        for permutation in itertools.permutations(particles, 2):
+            if (permutation[1], permutation[0]) not in particle_combinations:
+                particle_combinations.append(permutation)
 
     # --------------------------------------------
     # Domain
@@ -137,36 +143,32 @@ def main():
 
     print('Running calculation...')
 
-    calculate(particles, walls, dt, end_time, time_filepath, position_filepath, velocity_filepath, results_filepath)
+    calculate(particles, particle_combinations, walls, dt, end_time, time_filepath, position_filepath, velocity_filepath, results_filepath)
 
     print('Finished calculations')
 
     # --------------------------------------------
     # Animation
     # --------------------------------------------
-    animate(time_filepath, position_filepath, velocity_filepath, results_filepath, rp, xmin, xmax, ymin, ymax, n_frames, save_animation)
+    if gravity:
+        tracked_var = 'me'
+    else:
+        tracked_var = 'ke'
+
+    animate(time_filepath, position_filepath, velocity_filepath, results_filepath, tracked_var, rp, xmin, xmax, ymin, ymax, n_frames, save_animation)
 
 
-def calculate(particles, walls, dt, end_time, time_filepath, position_filepath, velocity_filepath, results_filepath) -> None:
+def calculate(particles, particle_combinations, walls, dt, end_time, time_filepath, position_filepath, velocity_filepath, results_filepath):
     time = np.arange(0, end_time, dt)
 
     # position_file = open(position_filepath, 'w')
     # velocity_file = open(velocity_filepath, 'w')
     # results_file = open(results_filepath, 'w')
 
-    pd.DataFrame(time).to_csv(time_filepath, header=None)
+    pd.DataFrame(time).to_csv(time_filepath, header=None, index=False)
 
     n_substeps = 10
     dt_substeps = dt / n_substeps
-
-    particle_combinations = []
-    for permutation in itertools.permutations(particles, 2):
-        if (permutation[1], permutation[0]) not in particle_combinations:
-            particle_combinations.append(permutation)
-
-    print('Combinations:')
-    for (particle, other) in particle_combinations:
-        print(f'\t{particle.id}, {other.id}')
 
     with open(position_filepath, 'w') as position_file, open(velocity_filepath, 'w') as velocity_file, open(results_filepath, 'w') as results_file:
         results_file.write('ke,pe,me\n')
@@ -174,10 +176,6 @@ def calculate(particles, walls, dt, end_time, time_filepath, position_filepath, 
             ke = 0.0
             pe = 0.0
             me = 0.0
-
-            for particle in particles:
-                particle.collided = False
-                # particle.finished_update = False # In integrate
 
             for particle in particles:
                 particle.integrate(dt)
@@ -189,21 +187,41 @@ def calculate(particles, walls, dt, end_time, time_filepath, position_filepath, 
                     while keepgoing:
                         particle.integrate(dt_substeps)
                         i_substep += 1
-                        if i_substep > n_substeps or particle.detect_wall_contact(walls):
+                        if particle.detect_wall_contact(walls) or i_substep > n_substeps:
                             keepgoing = False
                         else:
                             particle.update()
 
                     dt_remaining = dt - dt_substeps * i_substep
-                    particle.integrate(dt_remaining)
-
-                particle.update()
+                    particle.integrate_update(dt_remaining)
 
             # particle collision detection
             for particle, other in particle_combinations:
-                pass
+                if not particle.finished_update and not other.finished_update and particle.distance(other) < particle.r + other.r:
+                    i_substep = 0
+                    keepgoing = True
+                    while keepgoing:
+                        particle.integrate(dt_substeps)
+                        other.integrate(dt_substeps)
+                        if particle.distance(other) < particle.r + other.r or i_substep > n_substeps:
+                            keepgoing = False
+                        else:
+                            particle.update()
+                            other.update()
+                            i_substep += 1
+
+                    dt_remaining = dt - dt_substeps * i_substep
+
+                    particle.collision_acceleration(other, dt_remaining)
+                    other.collision_acceleration(particle, dt_remaining)
+
+                    particle.integrate_update(dt_remaining, True)
+                    other.integrate_update(dt_remaining, True)
 
             for particle in particles:
+                if not particle.finished_update:
+                    particle.update()
+
                 ke += particle.kinetic_energy()
                 pe += particle.potential_energy(walls[3])
                 me += particle.mechanical_energy(walls[3])
@@ -218,7 +236,7 @@ def calculate(particles, walls, dt, end_time, time_filepath, position_filepath, 
     return
 
 
-def animate(time_file, position_file, velocity_file, results_file, rp, xmin, xmax, ymin, ymax, n_frames, save) -> None:
+def animate(time_file, position_file, velocity_file, results_file, tracked_var: str, rp, xmin, xmax, ymin, ymax, n_frames, save) -> None:
     cwd = Path.cwd()
 
     time = pd.read_csv(time_file, header=None)
@@ -236,32 +254,38 @@ def animate(time_file, position_file, velocity_file, results_file, rp, xmin, xma
     sin_theta = np.sin(theta)
 
     particles = []
-    particle_xy_plot = lambda i, r, time_step: (
-    r * cos_theta + position[2 * i][time_step], r * sin_theta + position[2 * i + 1][time_step])
+    particle_xy_plot = lambda i, r, time_step: (r * cos_theta + position[2 * i][time_step], r * sin_theta + position[2 * i + 1][time_step])
     for i, r in enumerate(rp):
         x_particle, y_particle = particle_xy_plot(i, r, 0)
         particles.append(ax.plot(x_particle, y_particle, '-k')[0])
     ax.axis('equal')
     ax.set(xlim=(xmin, xmax), ylim=(xmin, ymax))
 
-    bar, = ax_bar.barh('ME', results['me'][0])
-    ax_bar.set_xlim(results['me'].min(), results['me'].max())
+    bar, = ax_bar.barh(tracked_var.upper(), results[tracked_var][0])
+    ax_bar.set_xlim(results[tracked_var].min(), results[tracked_var].max())
 
     def update(frame):
         for i, (r, particle) in enumerate(zip(rp, particles)):
             x_particle, y_particle = particle_xy_plot(i, r, frame)
             particle.set_xdata(x_particle)
             particle.set_ydata(y_particle)
-        bar.set_width(results['me'][frame])
+        bar.set_width(results[tracked_var][frame])
         return particles
 
     n_time = len(time)
     frames = np.linspace(0, n_time - 1, n_frames).astype(int)
     ani = animation.FuncAnimation(fig=fig, func=update, frames=frames, interval=1)
 
+    fig, ax = plt.subplots()
+    ax.plot(time, results[tracked_var])
+    ax.set_xlabel('t')
+    ax.set_ylabel(tracked_var.upper())
+    ax.grid()
+
     if save:
         print('Saving animation...')
         ani.save(filename=cwd.joinpath('animation.gif'), writer="pillow")
+        fig.savefig('tracked_var.png', dpi=400)
         print(f"Animation saved to '{cwd.joinpath('animation.gif')}'")
     else:
         plt.show()

@@ -1,7 +1,7 @@
 import numpy as np
 
 class Particle:
-    def __init__(self, id_, r, epsilon, rho, x, u, rho_l, mu_l, v_l, g, drag, grav, wall):
+    def __init__(self, id_, r, epsilon, rho, x, u, rho_l, mu_l, v_l, g, drag, grav, wall, collisions):
         self.id = id_
         self.r = r
         self.epsilon = epsilon
@@ -14,10 +14,10 @@ class Particle:
         self.mu_l = mu_l
         self.v_l = v_l
         self.g = g
-        self.drag = drag
-        self.grav = grav
-        self.wall = wall
-        self.collided = False
+        self.drag_on = drag
+        self.gravity_on = grav
+        self.walls_on = wall
+        self.collisions_on = collisions
         self.reynolds_number(self.u)
         self.wall_collision = np.full((4,), False)
         self.wall_contact = np.full((4,), False)
@@ -73,22 +73,24 @@ class Particle:
 
     def detect_wall_contact(self, walls):
         self.wall_collision[:] = False
-        if self.r > walls[0] - self.x[0]:
-            self.wall_collision[0] = True
-        if self.r > self.x[0] - walls[1]:
-            self.wall_collision[1] = True
-        if self.r > walls[2] - self.x[1]:
-            self.wall_collision[2] = True
-        if self.r > self.x[1] - walls[3]:
-            self.wall_collision[3] = True
+        if self.walls_on:
+            if self.r > walls[0] - self.x[0]:
+                self.wall_collision[0] = True
+            if self.r > self.x[0] - walls[1]:
+                self.wall_collision[1] = True
+            if self.r > walls[2] - self.x[1]:
+                self.wall_collision[2] = True
+            if self.r > self.x[1] - walls[3]:
+                self.wall_collision[3] = True
         return np.any(self.wall_collision)
 
     def wall_contact_acceleration(self, dt):
         a = np.zeros((2,))
-        if self.wall_collision[0] or self.wall_collision[1]:
-            a[0] += -(1 + self.epsilon) * self.u[0] / dt
-        if self.wall_collision[2] or self.wall_collision[3]:
-            a[1] += -(1 + self.epsilon) * self.u[1] / dt
+        if self.walls_on:
+            if self.wall_collision[0] or self.wall_collision[1]:
+                a[0] += -(1 + self.epsilon) * self.u[0] / dt
+            if self.wall_collision[2] or self.wall_collision[3]:
+                a[1] += -(1 + self.epsilon) * self.u[1] / dt
         return a
 
     def collision_acceleration(self, other, dt):
@@ -103,11 +105,11 @@ class Particle:
 
     def apply_accelerations(self, u_p, dt, collision: bool):
         a = np.zeros((2,))
-        if self.drag:
+        if self.drag_on:
             a += self.drag_acceleration(u_p)
-        if self.grav:
+        if self.gravity_on:
             a += self.buoyancy_acceleration()
-        if self.wall:
+        if self.walls_on:
             a += self.wall_contact_acceleration(dt)
         if collision:
             a += self.a_collision

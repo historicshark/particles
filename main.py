@@ -11,16 +11,24 @@ from particle import Particle
 # --------------------------------------------
 # Global options
 # --------------------------------------------
-drag = False
+drag = True
 gravity = True
 wall_collisions = True
 particle_collisions = True
 
-dt = 0.001
-end_time = 80
+dt = 0.01
+end_time = 50
 n_frames = 500
 save_animation = False
 
+cwd = Path.cwd()
+particle_filepath = cwd.joinpath('particles.csv')
+domain_filepath = cwd.joinpath('domain.csv')
+con_filepath = cwd.joinpath('con.csv')
+time_filepath = cwd.joinpath('time.csv')
+position_filepath = cwd.joinpath('position.csv')
+velocity_filepath = cwd.joinpath('velocity.csv')
+results_filepath = cwd.joinpath('results.csv')
 
 def initialize():
     # --------------------------------------------
@@ -33,7 +41,7 @@ def initialize():
     rho_l = 0
 
     # Particles
-    n_particles = 3
+    n_particles = 5
 
     diameter = 10
     diameter_stddev = 3
@@ -44,11 +52,11 @@ def initialize():
 
     rho_p = 1
 
-    epsilon = .5
+    epsilon = .8
 
     # Domain
-    nx = 100
-    ny = 100
+    nx = 10
+    ny = 10
 
     xmin = -100
     xmax = 100
@@ -58,9 +66,6 @@ def initialize():
     # --------------------------------------------
     # Particles
     # --------------------------------------------
-    cwd = Path.cwd()
-    particle_filepath = cwd.joinpath('particles.csv')
-
     # rp = np.full((n_particles,), 10)
     # x0 = np.array([50, -50])
     # y0 = np.array([50, -50])
@@ -120,7 +125,6 @@ def initialize():
     # --------------------------------------------
     # Domain
     # --------------------------------------------
-    domain_filepath = cwd.joinpath('domain.csv')
     walls = [xmax, xmin, ymax, ymin]
 
     x = np.linspace(xmin, xmax, nx)
@@ -128,6 +132,31 @@ def initialize():
 
     X, Y = np.meshgrid(x, y)
 
+    X = X.flatten()
+    Y = Y.flatten()
+
+    coor = np.stack((X, Y), axis=1)
+    con = np.zeros(((nx - 1) * (ny - 1), 4), dtype=int)
+    for i in range(ny - 1):
+        for j in range(nx - 1):
+            ielem = (nx - 1) * i + j
+            idx1 = nx * i + j
+            idx2 = nx * i + 1 + j
+            idx3 = nx * (i + 1) + 1 + j
+            idx4 = nx * (i + 1) + j
+            con[ielem] = [idx1, idx2, idx3, idx4]
+
+    # Free vortex
+    # u_theta = Gamma / (2 pi r)
+    Gamma = 100
+    r = np.sqrt(X**2 + Y**2)
+    theta = np.arctan2(Y,X)
+    u_theta = Gamma / (2 * np.pi * r)
+    u_l = -u_theta * np.sin(theta)
+    v_l = u_theta * np.cos(theta)
+
+    np.savetxt(con_filepath, con)
+    np.savetxt(domain_filepath, np.concatenate((coor, u_l[:, np.newaxis], v_l[:, np.newaxis]), axis=1))
     return
 
 
@@ -143,17 +172,10 @@ def main():
     # --------------------------------------------
     # Run calculations
     # --------------------------------------------
-    cwd = Path.cwd()
-    particle_filepath = cwd.joinpath('particles.csv')
-    domain_filepath = cwd.joinpath('domain.csv')
-    time_filepath = cwd.joinpath('time.csv')
-    position_filepath = cwd.joinpath('position.csv')
-    velocity_filepath = cwd.joinpath('velocity.csv')
-    results_filepath = cwd.joinpath('results.csv')
 
     print('Running calculation...')
 
-    calculate(dt, end_time, particle_filepath, domain_filepath, time_filepath, position_filepath, velocity_filepath, results_filepath)
+    calculate(dt, end_time)
 
     print('Finished calculations')
 
@@ -165,10 +187,10 @@ def main():
     else:
         tracked_var = 'ke'
 
-    animate(particle_filepath, domain_filepath, time_filepath, position_filepath, velocity_filepath, results_filepath, tracked_var, n_frames, save_animation)
+    animate(tracked_var, n_frames, save_animation)
 
 
-def calculate(dt, end_time, particle_filepath, domain_filepath, time_filepath, position_filepath, velocity_filepath, results_filepath):
+def calculate(dt, end_time):
     time = np.arange(0, end_time, dt)
 
     pd.DataFrame(time).to_csv(time_filepath, header=None, index=False)
@@ -183,6 +205,11 @@ def calculate(dt, end_time, particle_filepath, domain_filepath, time_filepath, p
         for permutation in itertools.permutations(particles, 2):
             if (permutation[1], permutation[0]) not in particle_combinations:
                 particle_combinations.append(permutation)
+
+    con = np.genfromtxt(con_filepath, dtype=int)
+    domain = np.genfromtxt(domain_filepath)
+    coor = domain[:, :2]
+    u_l = domain[:, 2:]
 
     n_substeps = 10
     dt_substeps = dt / n_substeps
@@ -253,14 +280,24 @@ def calculate(dt, end_time, particle_filepath, domain_filepath, time_filepath, p
     return
 
 
-def animate(particle_filepath, domain_filepath, time_file, position_file, velocity_file, results_file, tracked_var: str, n_frames, save) -> None:
+
+
+def interpolate_on_reference_element(xi, u):
+    N = np.array(((1 - xi[0]) * (1 - xi[1]) / 4,
+                  (1 + xi[0]) * (1 - xi[1]) / 4,
+                  (1 + xi[0]) * (1 + xi[1]) / 4,
+                  (1 - xi[0]) * (1 - xi[1]) / 4,
+                ))
+    return u @ N
+
+def animate(tracked_var: str, n_frames, save) -> None:
     cwd = Path.cwd()
 
     particles = pd.read_csv(particle_filepath, header=None)
-    time = pd.read_csv(time_file, header=None)
-    position = pd.read_csv(position_file, header=None)
-    # velocity = pd.read_csv(velocity_file, header=None)
-    results = pd.read_csv(results_file)
+    time = pd.read_csv(time_filepath, header=None)
+    position = pd.read_csv(position_filepath, header=None)
+    # velocity = pd.read_csv(velocity_filepath, header=None)
+    results = pd.read_csv(results_filepath)
 
     rp = particles[1]
     xmax = particles[14][0]

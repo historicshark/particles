@@ -4,15 +4,28 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 import itertools
+import argparse
 
 from particle import Particle
 
+# --------------------------------------------
+# Global options
+# --------------------------------------------
+drag = False
+gravity = True
+wall_collisions = True
+particle_collisions = True
 
-def main():
+dt = 0.001
+end_time = 80
+n_frames = 500
+save_animation = False
+
+
+def initialize():
     # --------------------------------------------
     # Inputs
     # --------------------------------------------
-
     # Fluid
     gx = 0
     gy = -9.81
@@ -20,7 +33,7 @@ def main():
     rho_l = 0
 
     # Particles
-    n_particles = 30
+    n_particles = 3
 
     diameter = 10
     diameter_stddev = 3
@@ -33,11 +46,6 @@ def main():
 
     epsilon = .5
 
-    drag = False
-    gravity = False
-    wall_collisions = True
-    particle_collisions = True
-
     # Domain
     nx = 100
     ny = 100
@@ -47,15 +55,12 @@ def main():
     ymin = -100
     ymax = 100
 
-    # Time
-    dt = 0.001
-    end_time = 150
-    n_frames = 800
-    save_animation = False
-
     # --------------------------------------------
     # Particles
     # --------------------------------------------
+    cwd = Path.cwd()
+    particle_filepath = cwd.joinpath('particles.csv')
+
     # rp = np.full((n_particles,), 10)
     # x0 = np.array([50, -50])
     # y0 = np.array([50, -50])
@@ -74,6 +79,7 @@ def main():
     v0 = rng.normal(velocity, velocity_stddev, (n_particles,))
 
     rho = np.full((n_particles,), rho_p)
+
     # rho = np.array([rho_p, 10*rho_p])
 
     def distance(x1, y1, x2, y2):
@@ -86,7 +92,8 @@ def main():
         for i in range(n_particles):
             for j in range(n_particles):
                 if i != j:
-                    if particles_to_keep[i] and particles_to_keep[j] and distance(x0[i], y0[i], x0[j], y0[j]) < rp[i] + rp[j]:
+                    if particles_to_keep[i] and particles_to_keep[j] and distance(x0[i], y0[i], x0[j], y0[j]) < rp[i] + \
+                            rp[j]:
                         particles_to_keep[j] = False
                         n_particles_removed += 1
         n_particles -= n_particles_removed
@@ -103,25 +110,17 @@ def main():
         x0 = np.zeros((n_particles,))
         y0 = np.zeros((n_particles,))
 
-    position = np.stack((x0, y0), axis=1)
-    velocity = np.stack((u0, v0), axis=1)
     v_l = np.zeros((2,))
     g = np.array([gx, gy])
 
-    particles = []
-    for i in range(n_particles):
-        particles.append(
-            Particle(i, rp[i], epsilon, rho[i], position[i], velocity[i], rho_l, mu_l, v_l, g, drag, gravity, wall_collisions, particle_collisions))
-
-    particle_combinations = []
-    if particle_collisions:
-        for permutation in itertools.permutations(particles, 2):
-            if (permutation[1], permutation[0]) not in particle_combinations:
-                particle_combinations.append(permutation)
+    with open(particle_filepath, 'w') as f:
+        for i in range(n_particles):
+            f.write(f'{i},{rp[i]},{epsilon},{rho[i]},{x0[i]},{y0[i]},{u0[i]},{v0[i]},{rho_l},{mu_l},{v_l[0]},{v_l[1]},{g[0]},{g[1]},{xmax},{xmin},{ymax},{ymin}\n')
 
     # --------------------------------------------
     # Domain
     # --------------------------------------------
+    domain_filepath = cwd.joinpath('domain.csv')
     walls = [xmax, xmin, ymax, ymin]
 
     x = np.linspace(xmin, xmax, nx)
@@ -129,13 +128,24 @@ def main():
 
     X, Y = np.meshgrid(x, y)
 
+    return
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--from_file', action='store_true', help='Run from particle file')
+    args = parser.parse_args()
+    from_file = args.from_file
+
+    if not from_file:
+        initialize()
+
     # --------------------------------------------
     # Run calculations
     # --------------------------------------------
     cwd = Path.cwd()
-
-    domain_filepath = cwd.joinpath('domain.csv')
     particle_filepath = cwd.joinpath('particles.csv')
+    domain_filepath = cwd.joinpath('domain.csv')
     time_filepath = cwd.joinpath('time.csv')
     position_filepath = cwd.joinpath('position.csv')
     velocity_filepath = cwd.joinpath('velocity.csv')
@@ -143,7 +153,7 @@ def main():
 
     print('Running calculation...')
 
-    calculate(particles, particle_combinations, walls, dt, end_time, time_filepath, position_filepath, velocity_filepath, results_filepath)
+    calculate(dt, end_time, particle_filepath, domain_filepath, time_filepath, position_filepath, velocity_filepath, results_filepath)
 
     print('Finished calculations')
 
@@ -155,17 +165,24 @@ def main():
     else:
         tracked_var = 'ke'
 
-    animate(time_filepath, position_filepath, velocity_filepath, results_filepath, tracked_var, rp, xmin, xmax, ymin, ymax, n_frames, save_animation)
+    animate(particle_filepath, domain_filepath, time_filepath, position_filepath, velocity_filepath, results_filepath, tracked_var, n_frames, save_animation)
 
 
-def calculate(particles, particle_combinations, walls, dt, end_time, time_filepath, position_filepath, velocity_filepath, results_filepath):
+def calculate(dt, end_time, particle_filepath, domain_filepath, time_filepath, position_filepath, velocity_filepath, results_filepath):
     time = np.arange(0, end_time, dt)
 
-    # position_file = open(position_filepath, 'w')
-    # velocity_file = open(velocity_filepath, 'w')
-    # results_file = open(results_filepath, 'w')
-
     pd.DataFrame(time).to_csv(time_filepath, header=None, index=False)
+
+    particles = []
+    with open(particle_filepath) as f:
+        for line in f:
+            particles.append(Particle.from_csv(line, drag, gravity, wall_collisions, particle_collisions))
+
+    particle_combinations = []
+    if particles[0].collisions_on:
+        for permutation in itertools.permutations(particles, 2):
+            if (permutation[1], permutation[0]) not in particle_combinations:
+                particle_combinations.append(permutation)
 
     n_substeps = 10
     dt_substeps = dt / n_substeps
@@ -181,13 +198,13 @@ def calculate(particles, particle_combinations, walls, dt, end_time, time_filepa
                 particle.integrate(dt)
 
                 # If particle hits a wall, reduce time step to integrate up to collision
-                if particle.detect_wall_contact(walls):
+                if particle.detect_wall_contact():
                     i_substep = 0
                     keepgoing = True
                     while keepgoing:
                         particle.integrate(dt_substeps)
                         i_substep += 1
-                        if particle.detect_wall_contact(walls) or i_substep > n_substeps:
+                        if particle.detect_wall_contact() or i_substep > n_substeps:
                             keepgoing = False
                         else:
                             particle.update()
@@ -223,8 +240,8 @@ def calculate(particles, particle_combinations, walls, dt, end_time, time_filepa
                     particle.update()
 
                 ke += particle.kinetic_energy()
-                pe += particle.potential_energy(walls[3])
-                me += particle.mechanical_energy(walls[3])
+                pe += particle.potential_energy()
+                me += particle.mechanical_energy()
 
                 position_file.write(particle.position_string() + ',')
                 velocity_file.write(particle.velocity_string() + ',')
@@ -236,13 +253,20 @@ def calculate(particles, particle_combinations, walls, dt, end_time, time_filepa
     return
 
 
-def animate(time_file, position_file, velocity_file, results_file, tracked_var: str, rp, xmin, xmax, ymin, ymax, n_frames, save) -> None:
+def animate(particle_filepath, domain_filepath, time_file, position_file, velocity_file, results_file, tracked_var: str, n_frames, save) -> None:
     cwd = Path.cwd()
 
+    particles = pd.read_csv(particle_filepath, header=None)
     time = pd.read_csv(time_file, header=None)
     position = pd.read_csv(position_file, header=None)
     # velocity = pd.read_csv(velocity_file, header=None)
     results = pd.read_csv(results_file)
+
+    rp = particles[1]
+    xmax = particles[14][0]
+    xmin = particles[15][0]
+    ymax = particles[16][0]
+    ymin = particles[17][0]
 
     fig, (ax, ax_bar) = plt.subplots(2, 1, height_ratios=[10, 1])
     wall_x = (xmin, xmax, xmax, xmin, xmin)

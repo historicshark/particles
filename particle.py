@@ -1,7 +1,7 @@
 import numpy as np
 
 class Particle:
-    def __init__(self, id_, r, epsilon, rho, x, u, rho_l, mu_l, v_l, g, drag, grav, wall, collisions):
+    def __init__(self, id_, r, epsilon, rho, x, u, rho_l, mu_l, v_l, g, xmax, xmin, ymax, ymin, drag, grav, wall, collisions):
         self.id = id_
         self.r = r
         self.epsilon = epsilon
@@ -19,6 +19,7 @@ class Particle:
         self.walls_on = wall
         self.collisions_on = collisions
         self.reynolds_number(self.u)
+        self.walls = np.array([xmax, xmin, ymax, ymin])
         self.wall_collision = np.full((4,), False)
         self.wall_contact = np.full((4,), False)
         self.a_collision = 0.0
@@ -50,11 +51,11 @@ class Particle:
     def kinetic_energy(self):
         return 0.5 * self.mass() * (self.u @ self.u)
 
-    def potential_energy(self, ymin):
-        return self.mass() * -self.g[1] * (self.x[1] - ymin)
+    def potential_energy(self):
+        return self.mass() * -self.g[1] * (self.x[1] - self.walls[3])
 
-    def mechanical_energy(self, ymin):
-        return self.kinetic_energy() + self.potential_energy(ymin)
+    def mechanical_energy(self):
+        return self.kinetic_energy() + self.potential_energy()
 
     def drag_coefficient(self):
         if self.re > 1e-10:
@@ -65,22 +66,21 @@ class Particle:
     def drag_acceleration(self, u_p):
         self.reynolds_number(u_p)
         v_rel = self.v_l - u_p
-        return 1.0 / 2.0 * self.rho_l / self.rho * np.sqrt(
-            v_rel @ v_rel) * v_rel * self.area_xs() / self.volume() * self.drag_coefficient()
+        return 1.0 / 2.0 * self.rho_l / self.rho * np.sqrt(v_rel @ v_rel) * v_rel * self.area_xs() / self.volume() * self.drag_coefficient()
 
     def buoyancy_acceleration(self):
         return (self.rho - self.rho_l) / self.rho * self.g
 
-    def detect_wall_contact(self, walls):
+    def detect_wall_contact(self):
         self.wall_collision[:] = False
         if self.walls_on:
-            if self.r > walls[0] - self.x[0]:
+            if self.r > self.walls[0] - self.x[0]:
                 self.wall_collision[0] = True
-            if self.r > self.x[0] - walls[1]:
+            if self.r > self.x[0] - self.walls[1]:
                 self.wall_collision[1] = True
-            if self.r > walls[2] - self.x[1]:
+            if self.r > self.walls[2] - self.x[1]:
                 self.wall_collision[2] = True
-            if self.r > self.x[1] - walls[3]:
+            if self.r > self.x[1] - self.walls[3]:
                 self.wall_collision[3] = True
         return np.any(self.wall_collision)
 
@@ -140,3 +140,12 @@ class Particle:
 
     def velocity_string(self):
         return f'{self.u[0]},{self.u[1]}'
+
+    @classmethod
+    def from_csv(cls, line: str, drag, gravity, wall_collisions, particle_collisions):
+        p = line[:-1].split(',')
+        id_ = int(p[0])
+        r, epsilon, rho, x0, y0, u0, v0, rho_l, mu_l, vlx, vly, gx, gy, xmax, xmin, ymax, ymin = map(float, p[1:18])
+
+        particle = cls(id_, r, epsilon, rho, np.array([x0, y0]), np.array([u0, v0]), rho_l, mu_l, np.array([vlx, vly]), np.array([gx, gy]), xmax, xmin, ymax, ymin, drag, gravity, wall_collisions, particle_collisions)
+        return particle

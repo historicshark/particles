@@ -1,5 +1,7 @@
 import numpy as np
 
+from cell import Cell
+
 class Particle:
     def __init__(self, id_, r, epsilon, rho, x, u, rho_l, mu_l, v_l, g, xmax, xmin, ymax, ymin, drag, grav, wall, collisions):
         self.id = id_
@@ -18,7 +20,7 @@ class Particle:
         self.gravity_on = grav
         self.walls_on = wall
         self.collisions_on = collisions
-        self.reynolds_number(self.u)
+        self.re = 0.0
         self.walls = np.array([xmax, xmin, ymax, ymin])
         self.wall_collision = np.full((4,), False)
         self.wall_contact = np.full((4,), False)
@@ -59,14 +61,14 @@ class Particle:
 
     def drag_coefficient(self):
         if self.re > 1e-10:
-            return 24.0 / self.re * (2.0 / 3.0 + (12.0 / self.re + 3.0 / 4.0 * (1 + 3.315 / np.sqrt(self.re)) ** (-1)))
+            return 24.0 / self.re * (2.0 / 3.0 + (12.0 / self.re + 3.0 / 4.0 * (1 + 3.315 / np.sqrt(self.re)))**(-1))
         else:
             return 0.0
 
     def drag_acceleration(self, u_p):
         self.reynolds_number(u_p)
         v_rel = self.v_l - u_p
-        return 1.0 / 2.0 * self.rho_l / self.rho * np.sqrt(v_rel @ v_rel) * v_rel * self.area_xs() / self.volume() * self.drag_coefficient()
+        return 0.5 * self.rho_l * np.sqrt(v_rel @ v_rel) * v_rel * self.area_xs() * self.drag_coefficient() / self.mass()
 
     def buoyancy_acceleration(self):
         return (self.rho - self.rho_l) / self.rho * self.g
@@ -134,6 +136,26 @@ class Particle:
         self.integrate(dt, collision)
         self.update()
         return
+
+    def interpolate(self, cell):
+        A = np.array([[cell.vertices[0, 0] * cell.vertices[0, 1], cell.vertices[0, 0], cell.vertices[0, 1], 1],
+                      [cell.vertices[1, 0] * cell.vertices[1, 1], cell.vertices[1, 0], cell.vertices[1, 1], 1],
+                      [cell.vertices[2, 0] * cell.vertices[2, 1], cell.vertices[2, 0], cell.vertices[2, 1], 1],
+                      [cell.vertices[3, 0] * cell.vertices[3, 1], cell.vertices[3, 0], cell.vertices[3, 1], 1],
+                      ])
+        coeff = np.linalg.solve(A, cell.velocity)
+        return coeff[0] * self.x[0] * self.x[1] + coeff[1] * self.x[0] + coeff[2] * self.x[1] + coeff[3]
+
+    def in_cell(self, cell: Cell):
+        vectors = cell.vertices - self.x
+        test = np.sign(np.cross(vectors, vectors[np.r_[1:4,0]]))
+        return np.all(test > 0) or np.all(test < 0)
+
+    def in_cell_and_interpolate(self, cell: Cell):
+        if self.in_cell(cell):
+            self.v_l = self.interpolate(cell)
+            return True
+        return False
 
     def position_string(self):
         return f'{self.x[0]},{self.x[1]}'

@@ -6,19 +6,20 @@ from pathlib import Path
 import itertools
 import argparse
 
+from cell import Cell
 from particle import Particle
 
 # --------------------------------------------
 # Global options
 # --------------------------------------------
 drag = True
-gravity = True
+gravity = False
 wall_collisions = True
-particle_collisions = True
+particle_collisions = False
 
-dt = 0.01
-end_time = 50
-n_frames = 500
+dt = 0.001
+end_time = 1
+n_frames = 100
 save_animation = False
 
 cwd = Path.cwd()
@@ -37,31 +38,31 @@ def initialize():
     # Fluid
     gx = 0
     gy = -9.81
-    mu_l = 1
-    rho_l = 0
+    mu_l = 1e-3
+    rho_l = 1000
 
     # Particles
-    n_particles = 5
+    n_particles = 1
 
-    diameter = 10
-    diameter_stddev = 3
-    diameter_min = 1
+    diameter = .00004
+    diameter_stddev = .00001
+    diameter_min = .00002
 
     velocity = 0
-    velocity_stddev = 20
+    velocity_stddev = 0
 
-    rho_p = 1
+    rho_p = 1.2
 
-    epsilon = .8
+    epsilon = 1
 
     # Domain
-    nx = 10
-    ny = 10
+    nx = 30
+    ny = 30
 
-    xmin = -100
-    xmax = 100
-    ymin = -100
-    ymax = 100
+    xmin = -.002
+    xmax = .002
+    ymin = -.002
+    ymax = .002
 
     # --------------------------------------------
     # Particles
@@ -111,9 +112,6 @@ def initialize():
         y0 = y0[particles_to_keep]
         u0 = u0[particles_to_keep]
         v0 = v0[particles_to_keep]
-    else:
-        x0 = np.zeros((n_particles,))
-        y0 = np.zeros((n_particles,))
 
     v_l = np.zeros((2,))
     g = np.array([gx, gy])
@@ -148,10 +146,10 @@ def initialize():
 
     # Free vortex
     # u_theta = Gamma / (2 pi r)
-    Gamma = 100
+    scale = .00002
     r = np.sqrt(X**2 + Y**2)
     theta = np.arctan2(Y,X)
-    u_theta = Gamma / (2 * np.pi * r)
+    u_theta = scale / r
     u_l = -u_theta * np.sin(theta)
     v_l = u_theta * np.cos(theta)
 
@@ -192,6 +190,8 @@ def main():
 
 def calculate(dt, end_time):
     time = np.arange(0, end_time, dt)
+    time_progress = np.linspace(0,end_time, 100)
+    i_progress = 0
 
     pd.DataFrame(time).to_csv(time_filepath, header=None, index=False)
 
@@ -211,17 +211,27 @@ def calculate(dt, end_time):
     coor = domain[:, :2]
     u_l = domain[:, 2:]
 
+    cells = []
+    for connectivity in con:
+        cells.append(Cell(coor[connectivity], u_l[connectivity]))
+
     n_substeps = 10
     dt_substeps = dt / n_substeps
 
     with open(position_filepath, 'w') as position_file, open(velocity_filepath, 'w') as velocity_file, open(results_filepath, 'w') as results_file:
         results_file.write('ke,pe,me\n')
         for t in time:
+            if t > time_progress[i_progress]:
+                i_progress += 1
+                print(f'{t = }')
             ke = 0.0
             pe = 0.0
             me = 0.0
 
             for particle in particles:
+                for cell in itertools.takewhile(lambda cell_: not particle.in_cell_and_interpolate(cell_), cells):
+                    pass
+
                 particle.integrate(dt)
 
                 # If particle hits a wall, reduce time step to integrate up to collision
@@ -280,19 +290,7 @@ def calculate(dt, end_time):
     return
 
 
-
-
-def interpolate_on_reference_element(xi, u):
-    N = np.array(((1 - xi[0]) * (1 - xi[1]) / 4,
-                  (1 + xi[0]) * (1 - xi[1]) / 4,
-                  (1 + xi[0]) * (1 + xi[1]) / 4,
-                  (1 - xi[0]) * (1 - xi[1]) / 4,
-                ))
-    return u @ N
-
 def animate(tracked_var: str, n_frames, save) -> None:
-    cwd = Path.cwd()
-
     particles = pd.read_csv(particle_filepath, header=None)
     time = pd.read_csv(time_filepath, header=None)
     position = pd.read_csv(position_filepath, header=None)

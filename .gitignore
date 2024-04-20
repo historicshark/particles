@@ -29,3 +29,5 @@ __pycache__/run_particles.cpython-311.pyc
 __pycache__/
 .idea/
 con.csv
+main_old.py
+*.csv

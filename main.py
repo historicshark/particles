@@ -6,12 +6,12 @@ from pathlib import Path
 import itertools
 import argparse
 
+drag = True
+gravity = False
+wall_collisions = True
+particle_collisions = False
 
 def main():
-    drag = True
-    gravity = False
-    wall_collisions = True
-    particle_collisions = False
 
     dt = 0.0001
     end_time = 1
@@ -46,6 +46,7 @@ def main():
     xmax = .002
     ymin = -.002
     ymax = .002
+    walls = np.array([xmin, xmax, ymin, ymax])
 
     flow_type = 'uniform'
     parameters = [0.0002]
@@ -74,12 +75,12 @@ def main():
     np.savetxt('background_flow.csv', background_flow)
 
     # Calculations
-    calculate(dt, end_time, n_frames, rho_l, mu_l, flow_type, parameters)
+    calculate(dt, end_time, n_frames, n_particles, rho_l, mu_l, walls, flow_type, parameters)
 
     return
 
 
-def calculate(dt, end_time, n_frames, rho_l, mu_l, flow_type, parameters):
+def calculate(dt, end_time, n_frames, n_particles, rho_l, mu_l, walls, flow_type, parameters):
     radius = np.genfromtxt('radius.csv')
     rho_p = np.genfromtxt('rho_p.csv')
     x = np.genfromtxt('x.csv')
@@ -98,7 +99,7 @@ def calculate(dt, end_time, n_frames, rho_l, mu_l, flow_type, parameters):
 
     n_substeps = 10
     dt_substeps = dt / n_substeps
-
+    
     position = []
 
     for t_step in t:
@@ -106,7 +107,9 @@ def calculate(dt, end_time, n_frames, rho_l, mu_l, flow_type, parameters):
             print(f'time = {t_step}')
         # u_l = interpolate_flow_properties(x, coordinates, flow_velocity, connectivity)
         flow_velocity = interpolate_flow_properties_fast(x, flow_type, parameters)
-
+        
+        # wall collision
+        wall_collision = detect_wall_contact(x, radius, walls)
     return
 
 
@@ -147,6 +150,21 @@ def buoyancy_acceleration(rho_p, rho_l, g):
     return (rho_p - rho_l) / rho_p * g
 
 
+def detect_wall_contact(x, radius, walls):
+    collision_xmin = r > x[:,0] - walls[0]
+    collision_xmax = r > walls[1] - x[:,0]
+    collision_ymin = r > x[:,1] - walls[2]
+    collision_ymax = r > walls[3] - x[:,1]
+    return np.stack((collision_xmin or collision_xmax, collision_ymin or collision_ymax), axis=1)
+
+
+def wall_collision_acceleration(wall_collision, particle_velocity, epsilon, dt):
+    a = np.zeros(particle_velocity.shape)
+    a[wall_collision[:,0],0] = -(1 + epsilon) * particle_velocity[wall_collision[:,0],0] / dt
+    a[wall_collision[:,1],1] = -(1 + epsilon) * particle_velocity[wall_collision[:,1],1] / dt
+    return a
+
+
 def in_cell(x, vertices):
     vectors = vertices - x
     test = np.sign(np.cross(vectors, vectors[np.r_[1:4, 0]]))
@@ -183,6 +201,21 @@ def interpolate_flow_properties_fast(x, flow_type, parameters):
         v_l = np.zeros(x.shape)
 
     return np.stack((u_l, v_l), axis=1)
+
+
+def apply_acclerations(particle_velocity, flow_velocity, radius, rho_l, mu_l, m, g):
+    a = np.zeros(particle_velocity.shape)
+    
+    if drag:
+        a += drag_acceleration(particle_velocity, flow_velocity, radius, rho_l, mu_l, m)
+    if gravity:
+        a += buoyancy_acceleration(rho_p, rho_l, g)
+    if wall_collisions:
+        a += 
+
+def integrate(dt):
+    pass
+
 
 def particle_properties(n_particles, diameter, diameter_stddev, diameter_min, rho_p):
     rng = np.random.default_rng()

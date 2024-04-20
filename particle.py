@@ -118,10 +118,16 @@ class Particle:
         return a
 
     def integrate(self, dt, collision=False):
-        a1 = self.apply_accelerations(self.u_n, dt, collision)
+        a1 = self.apply_accelerations(self.u_n,               dt, collision)
+        v1 = self.u_n
+        a2 = self.apply_accelerations(self.u_n + dt * a1 / 2, dt, collision)
+        v2 = self.u_n + dt * v1 / 2
+        a3 = self.apply_accelerations(self.u_n + dt * a2 / 2, dt, collision)
+        v3 = self.x_n
+        a4 = self.apply_accelerations(self.u_n + dt * a3,     dt, collision)
 
         self.u = self.u_n + dt * a1
-        self.x = self.x_n + dt * self.u
+        # self.x = 0.5 *
 
         self.finished_update = False
         return

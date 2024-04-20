@@ -17,7 +17,7 @@ gravity = False
 wall_collisions = True
 particle_collisions = False
 
-dt = 0.001
+dt = 0.0001
 end_time = 1
 n_frames = 100
 save_animation = False
@@ -128,10 +128,10 @@ def initialize():
     x = np.linspace(xmin, xmax, nx)
     y = np.linspace(ymin, ymax, ny)
 
-    X, Y = np.meshgrid(x, y)
+    X_, Y_ = np.meshgrid(x, y)
 
-    X = X.flatten()
-    Y = Y.flatten()
+    X = X_.flatten()
+    Y = Y_.flatten()
 
     coor = np.stack((X, Y), axis=1)
     con = np.zeros(((nx - 1) * (ny - 1), 4), dtype=int)
@@ -146,15 +146,25 @@ def initialize():
 
     # Free vortex
     # u_theta = Gamma / (2 pi r)
-    scale = .00002
-    r = np.sqrt(X**2 + Y**2)
-    theta = np.arctan2(Y,X)
-    u_theta = scale / r
-    u_l = -u_theta * np.sin(theta)
-    v_l = u_theta * np.cos(theta)
+    # scale = .00002
+    # r = np.sqrt(X**2 + Y**2)
+    # theta = np.arctan2(Y,X)
+    # u_theta = scale / r
+    # u_l = -u_theta * np.sin(theta)
+    # v_l = u_theta * np.cos(theta)
+
+    # uniform
+    u_l = np.full(X.shape, (xmax-xmin)/20.)
+    v_l = np.zeros(X.shape)
 
     np.savetxt(con_filepath, con)
     np.savetxt(domain_filepath, np.concatenate((coor, u_l[:, np.newaxis], v_l[:, np.newaxis]), axis=1))
+
+    # fig, ax = plt.subplots()
+    # c = ax.contourf(X_, Y_, scale / np.sqrt(X_**2 + Y_**2))
+    # ax.axis('equal')
+    # fig.colorbar(c)
+    # plt.show()
     return
 
 

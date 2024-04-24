@@ -18,19 +18,19 @@ save_animation = False
 def main():
 
     dt = 0.001
-    end_time = 10
-    n_frames = 300
+    end_time = 20
+    n_frames = 1000
 
     g = np.array([0, -9.81])
     mu_l = 1e-3
     rho_l = 0
 
     # Particles
-    n_particles = 100
+    n_particles = 200
 
     rho_p = 10
 
-    diameter = 10
+    diameter = 7
     diameter_stddev = 2
     diameter_min = 1
 
@@ -111,6 +111,12 @@ def calculate(dt, end_time, n_frames, n_particles, rho_l, mu_l, epsilon, g, wall
     n_t = len(t)
     frames = np.linspace(0, n_t - 1, n_frames).astype(int)
     t_save = t[frames]
+    
+    n_bar = 25
+    t_index_bar = np.linspace(0, n_t - 1, n_bar).astype(int)
+    t_bar = t[t_index_bar]
+    t_bar_current = 0
+    print('_' * n_bar)
 
     n_substeps = 10
     dt_substeps = dt / n_substeps
@@ -137,7 +143,10 @@ def calculate(dt, end_time, n_frames, n_particles, rho_l, mu_l, epsilon, g, wall
         u_n = u
 
         if t_step in t_save:
-            print(f'time = {t_step}')
+            if t_step > t_bar[t_bar_current]:
+                t_bar_current += 1
+                print('#', end='', flush=True)
+            # print(f'time = {t_step:.3f}')
 
             for x_ in x.flatten():
                 position_file.write(f'{x_},')

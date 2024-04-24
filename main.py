@@ -26,18 +26,18 @@ def main():
     rho_l = 0
 
     # Particles
-    n_particles = 50
+    n_particles = 20
 
     rho_p = 10
 
-    diameter = 5
-    diameter_stddev = 1
+    diameter = 10
+    diameter_stddev = 2
     diameter_min = 1
 
     velocity = 0
     velocity_stddev = 10
 
-    epsilon = .7
+    epsilon = .5
 
     # Domain
     nx = 20

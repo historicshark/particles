@@ -18,7 +18,7 @@ save_animation = False
 def main():
 
     dt = 0.001
-    end_time = 30
+    end_time = 10
     n_frames = 300
 
     g = np.array([0, -9.81])
@@ -26,7 +26,7 @@ def main():
     rho_l = 0
 
     # Particles
-    n_particles = 20
+    n_particles = 100
 
     rho_p = 10
 
@@ -37,7 +37,7 @@ def main():
     velocity = 0
     velocity_stddev = 10
 
-    epsilon = .5
+    epsilon = .7
 
     # Domain
     nx = 20
@@ -62,12 +62,14 @@ def main():
     x, u = initial_conditions(n_particles, xmin, xmax, ymin, ymax, velocity, velocity_stddev)
 
     # remove overlapping particles
-    n_particles, particles_to_keep = get_overlapping_index(n_particles, radius, x)
+    particles_to_keep = False
+    while not np.all(particles_to_keep):
+        n_particles, particles_to_keep = get_overlapping_index(n_particles, radius, x)
 
-    radius = radius[particles_to_keep]
-    rho_p = rho_p[particles_to_keep]
-    x = x[particles_to_keep]
-    u = u[particles_to_keep]
+        radius = radius[particles_to_keep]
+        rho_p = rho_p[particles_to_keep]
+        x = x[particles_to_keep]
+        u = u[particles_to_keep]
 
     # Grid
     coordinates, connectivity, background_flow = calculate_background_flow(xmin, xmax, ymin, ymax, nx, ny, flow_type, parameters)

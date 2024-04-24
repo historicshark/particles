@@ -9,34 +9,35 @@ import argparse
 drag = False
 gravity = True
 wall_collisions = True
-particle_collisions = False
+particle_collisions = True
+interpolation = False
+
+save_animation = False
+
 
 def main():
 
-    dt = 0.01
-    end_time = 100
-    n_frames = 200
-    save_animation = False
+    dt = 0.001
+    end_time = 30
+    n_frames = 300
 
     g = np.array([0, -9.81])
     mu_l = 1e-3
     rho_l = 0
 
     # Particles
-    n_particles = 2
+    n_particles = 50
 
-    rho_p = 1.2
+    rho_p = 10
 
-    diameter = 10
-    diameter_stddev = 0
+    diameter = 5
+    diameter_stddev = 1
     diameter_min = 1
 
-    velocity = 20
-    velocity_stddev = 5
+    velocity = 0
+    velocity_stddev = 10
 
-    particle_density = 1.2
-
-    epsilon = .8
+    epsilon = .7
 
     # Domain
     nx = 20
@@ -81,7 +82,12 @@ def main():
 
     calculate(dt, end_time, n_frames, n_particles, rho_l, mu_l, epsilon, g, walls, flow_type, parameters)
 
-    animate(dt, end_time, n_frames, 'ke', xmin, xmax, ymin, ymax)
+    if gravity:
+        tracked_var = 'me'
+    else:
+        tracked_var = 'ke'
+
+    animate(dt, end_time, n_frames, tracked_var, xmin, xmax, ymin, ymax)
 
     return
 
@@ -97,7 +103,7 @@ def calculate(dt, end_time, n_frames, n_particles, rho_l, mu_l, epsilon, g, wall
     connectivity = np.genfromtxt('con.csv', dtype=int)
     background_flow = np.genfromtxt('background_flow.csv')
 
-    m = mass(radius, rho_p)
+    mass = calculate_mass(radius, rho_p)
 
     t = np.arange(0, end_time, dt)
     n_t = len(t)
@@ -106,27 +112,27 @@ def calculate(dt, end_time, n_frames, n_particles, rho_l, mu_l, epsilon, g, wall
 
     n_substeps = 10
     dt_substeps = dt / n_substeps
-    
-    position = []
-    results = []
 
     position_file = open('position.csv', 'w')
+    velocity_file = open('velocity.csv', 'w')
     results_file = open('results.csv', 'w')
     radius_file = open('radius.csv', 'w')
     for t_step in t:
         # if np.any(np.abs(x) > 95):
         #     print('wall')
 
-        # flow_velocity = interpolate_flow_properties(x, coordinates, flow_velocity, connectivity)
-        flow_velocity = interpolate_flow_properties_fast(x, flow_type, parameters)
+        if interpolation:
+            flow_velocity = interpolate_flow_properties(x, coordinates, background_flow, connectivity)
+        else:
+            flow_velocity = interpolate_flow_properties_fast(x, flow_type, parameters)
 
-        # x, u = integrate_euler(dt, x_n, u_n, flow_velocity, radius, rho_p, m, epsilon, rho_l, mu_l, g, walls)
-        x, u = integrate_rk4(dt, x_n, u_n, flow_velocity, radius, rho_p, m, epsilon, rho_l, mu_l, g, walls)
+        wall_collision = detect_wall_contact(x, radius, walls)
+        particle_collision = detect_particle_contact(x, radius)
+
+        # x, u = integrate_euler(dt, x_n, u_n, flow_velocity, radius, rho_p, mass, epsilon, rho_l, mu_l, g, wall_collision, particle_collision)
+        x, u = integrate_rk4(dt, x_n, u_n, flow_velocity, radius, rho_p, mass, epsilon, rho_l, mu_l, g, wall_collision, particle_collision)
         x_n = x
         u_n = u
-
-        ke = np.sum(kinetic_energy(u, m))
-        pe = np.sum(kinetic_energy(u, m))
 
         if t_step in t_save:
             print(f'time = {t_step}')
@@ -135,15 +141,24 @@ def calculate(dt, end_time, n_frames, n_particles, rho_l, mu_l, epsilon, g, wall
                 position_file.write(f'{x_},')
             position_file.write('\n')
 
+            for u_ in u.flatten():
+                velocity_file.write(f'{u_},')
+            velocity_file.write('\n')
+
             for r_ in radius:
                 radius_file.write(f'{r_},')
             radius_file.write('\n')
 
-            results_file.write(f'{ke},{pe}\n')
+            ke = np.sum(kinetic_energy(u, mass))
+            pe = np.sum(potential_energy(mass, g, x, walls[2]))
+            me = ke + pe
 
-    np.savetxt('radius.csv', [radius])
+            results_file.write(f'{ke},{pe},{me}\n')
+
+    # np.savetxt('radius.csv', [radius])
     np.savetxt('t.csv', t_save)
     position_file.close()
+    velocity_file.close()
     results_file.close()
     radius_file.close()
     return
@@ -161,7 +176,7 @@ def volume(radius):
     return 4.0 / 3.0 * np.pi * radius**3
 
 
-def mass(radius, rho_p):
+def calculate_mass(radius, rho_p):
     return rho_p * volume(radius)
 
 
@@ -183,7 +198,7 @@ def drag_acceleration(particle_velocity, flow_velocity, radius, rho_l, mu_l, m):
 
 
 def buoyancy_acceleration(rho_p, rho_l, g):
-    return (rho_p - rho_l) / rho_p * g
+    return np.tensordot((rho_p - rho_l) / rho_p, g, 0)
 
 
 def detect_wall_contact(x, radius, walls):
@@ -194,10 +209,28 @@ def detect_wall_contact(x, radius, walls):
     return np.stack((np.logical_or(collision_xmin, collision_xmax), np.logical_or(collision_ymin, collision_ymax)), axis=1)
 
 
-def wall_collision_acceleration(wall_collision, particle_velocity, epsilon, dt):
-    wall_collision_loc = np.any(wall_collision, axis=1)
-    # a = np.zeros(particle_velocity.shape)
-    a = -(1 + epsilon) * particle_velocity[wall_collision] / dt
+def wall_collision_acceleration(wall_collision, velocity, epsilon, dt):
+    a = -(1 + epsilon) * velocity[wall_collision] / dt
+    return a
+
+
+def detect_particle_contact(position, radius):
+    particle_collision = np.full((len(position), len(position)), False)
+    for i, (x, r) in enumerate(zip(position, radius)):
+        particle_collision[i] = np.sqrt(np.sum((x - position)**2, axis=1)) < r + radius
+        particle_collision[i,i] = False
+    return particle_collision
+
+
+def particle_collision_acceleration(particle_collision, position, velocity, epsilon, mass, dt):
+    a = np.zeros_like(velocity)
+    for i, (x, u, m, loc) in enumerate(zip(position, velocity, mass, particle_collision)):
+        if not np.any(loc):
+            continue
+        distance_vector = position[loc] - x
+        n = distance_vector / np.sqrt(np.sum(distance_vector * distance_vector, axis=1))[:,np.newaxis]
+        u_prime = u + n * (np.sum((velocity[loc] - u) * n, axis=1) * (1 + epsilon) * mass[loc] / (mass[loc] + m))[:,np.newaxis]
+        a[i] = np.sum((u_prime - u) / dt, axis=0)
     return a
 
 
@@ -239,52 +272,68 @@ def interpolate_flow_properties_fast(x, flow_type, parameters):
     return np.stack((u_l, v_l), axis=1)
 
 
-def apply_accelerations(particle_position, particle_velocity, flow_velocity, radius, rho_p, m, epsilon, rho_l, mu_l, g, wall_collision, dt):
+def apply_accelerations(particle_position, particle_velocity, flow_velocity, radius, rho_p, mass, epsilon, rho_l, mu_l, g, wall_collision, particle_collision, dt):
     a = np.zeros(particle_velocity.shape)
     if drag:
-        a += drag_acceleration(particle_velocity, flow_velocity, radius, rho_l, mu_l, m)
+        a += drag_acceleration(particle_velocity, flow_velocity, radius, rho_l, mu_l, mass)
     if gravity:
         a += buoyancy_acceleration(rho_p, rho_l, g)
+    if particle_collisions:
+        a += particle_collision_acceleration(particle_collision, particle_position, particle_velocity, epsilon, mass, dt)
     if wall_collisions:
         a[wall_collision] = wall_collision_acceleration(wall_collision, particle_velocity, epsilon, dt)
     return a
 
 
-def integrate_euler(dt, x_n, u_n, flow_velocity, radius, rho_p, m, epsilon, rho_l, mu_l, g, walls):
-    wall_collision = detect_wall_contact(x_n, radius, walls)
-    a1 = apply_accelerations(x_n, u_n, flow_velocity, radius, rho_p, m, epsilon, rho_l, mu_l, g, wall_collision, dt)
+def integrate_euler(dt, x_n, u_n, flow_velocity, radius, rho_p, m, epsilon, rho_l, mu_l, g, wall_collision, particle_collision):
+    a1 = apply_accelerations(x_n, u_n, flow_velocity, radius, rho_p, m, epsilon, rho_l, mu_l, g, wall_collision, particle_collision, dt)
     u = u_n + a1 * dt
     x = 0.5 * a1 * dt**2 + u * dt + x_n
     return x, u
 
 
-def integrate_rk4(dt, x_n, u_n, flow_velocity, radius, rho_p, m, epsilon, rho_l, mu_l, g, walls):
-    wall_collision = detect_wall_contact(x_n, radius, walls)
+def integrate_rk4(dt, x_n, u_n, flow_velocity, radius, rho_p, m, epsilon, rho_l, mu_l, g, wall_collision, particle_collision):
+    u = np.zeros_like(u_n)
+    x = np.zeros_like(x_n)
 
-    if not np.any(wall_collision):
-        k1u = apply_accelerations(x_n,           u_n,           flow_velocity, radius, rho_p, m, epsilon, rho_l, mu_l, g, wall_collision, dt) * dt
-        k1x = u_n * dt
+    collision_loc = np.logical_or(np.any(wall_collision, axis=1),
+                                  np.any(particle_collision, axis=1))
 
-        k2u = apply_accelerations(x_n + k1x / 2, u_n + k1u / 2, flow_velocity, radius, rho_p, m, epsilon, rho_l, mu_l, g, wall_collision, dt) * dt
-        k2x = (u_n + k1u / 2) * dt
+    # if not np.any(wall_collision):
+    k1u = apply_accelerations(x_n,           u_n,           flow_velocity, radius, rho_p, m, epsilon, rho_l, mu_l, g, wall_collision, particle_collision, dt) * dt
+    k1x = u_n * dt
 
-        k3u = apply_accelerations(x_n + k2x / 2, u_n + k2u / 2, flow_velocity, radius, rho_p, m, epsilon, rho_l, mu_l, g, wall_collision, dt) * dt
-        k3x = (u_n + k2u / 2) * dt
+    k2u = apply_accelerations(x_n + k1x / 2, u_n + k1u / 2, flow_velocity, radius, rho_p, m, epsilon, rho_l, mu_l, g, wall_collision, particle_collision, dt) * dt
+    k2x = (u_n + k1u / 2) * dt
 
-        k4u = apply_accelerations(x_n + k3x,     u_n + k3u,     flow_velocity, radius, rho_p, m, epsilon, rho_l, mu_l, g, wall_collision, dt) * dt
-        k4x = (u_n + k3u) * dt
+    k3u = apply_accelerations(x_n + k2x / 2, u_n + k2u / 2, flow_velocity, radius, rho_p, m, epsilon, rho_l, mu_l, g, wall_collision, particle_collision, dt) * dt
+    k3x = (u_n + k2u / 2) * dt
 
-        u = u_n + (k1u + 2 * (k2u + k3u) + k4u) / 6
-        x = x_n + (k1x + 2 * (k2x + k3x) + k4x) / 6
+    k4u = apply_accelerations(x_n + k3x,     u_n + k3u,     flow_velocity, radius, rho_p, m, epsilon, rho_l, mu_l, g, wall_collision, particle_collision, dt) * dt
+    k4x = (u_n + k3u) * dt
 
-    else:
-        x, u = integrate_euler(dt, x_n, u_n, flow_velocity, radius, rho_p, m, epsilon, rho_l, mu_l, g, walls)
+    u[collision_loc] = u_n[collision_loc] + k1u[collision_loc]
+    x[collision_loc] = 0.5 * k1u[collision_loc] * dt + u[collision_loc] * dt + x_n[collision_loc]
+
+    u[~collision_loc] = u_n[~collision_loc] + (k1u[~collision_loc] + 2 * (k2u[~collision_loc] + k3u[~collision_loc]) + k4u[~collision_loc]) / 6
+    x[~collision_loc] = x_n[~collision_loc] + (k1x[~collision_loc] + 2 * (k2x[~collision_loc] + k3x[~collision_loc]) + k4x[~collision_loc]) / 6
+
+    # else:
+    #     x, u = integrate_euler(dt, x_n, u_n, flow_velocity, radius, rho_p, m, epsilon, rho_l, mu_l, g, wall_collision, particle_collision)
 
     return x, u
 
 
 def kinetic_energy(u, m):
     return 0.5 * m * magnitude(u)**2
+
+
+def potential_energy(m, g, x, ymin):
+    return m * g[1] * (ymin - x[:,1])
+
+
+def mechanical_energy(x, u, m, g, ymin):
+    return kinetic_energy(u, m) + potential_energy(m, g, x, ymin)
 
 
 def particle_properties(n_particles, diameter, diameter_stddev, diameter_min, rho_p):
@@ -302,9 +351,15 @@ def initial_conditions(n_particles, xmin, xmax, ymin, ymax, velocity, velocity_s
     middle = 0.9
     x0 = middle * ((xmax - xmin) * rng.random((n_particles,)) - (xmax - xmin) / 2)
     y0 = middle * ((ymax - ymin) * rng.random((n_particles,)) - (ymax - ymin) / 2)
+    # x0 = np.array((-20,20))
+    # y0 = np.zeros((n_particles,))
 
     u0 = rng.normal(velocity, velocity_stddev, (n_particles,))
     v0 = rng.normal(velocity, velocity_stddev, (n_particles,))
+
+    # u0 = np.zeros((n_particles,))
+    # u0 = np.array((10,-10))
+    # v0 = np.zeros((n_particles,))
 
     return np.stack((x0,y0), axis=1), np.stack((u0,v0), axis=1)
 
@@ -351,7 +406,7 @@ def calculate_background_flow(xmin, xmax, ymin, ymax, nx, ny, flow_type, paramet
     return coor, con, np.stack((u_l, v_l), axis=1)
 
 
-def animate(dt, end_time, n_frames, tracked_var: str, xmin, xmax, ymin, ymax, save=False) -> None:
+def animate(dt, end_time, n_frames, tracked_var: str, xmin, xmax, ymin, ymax) -> None:
     time = np.loadtxt('t.csv')
     position = np.genfromtxt('position.csv', delimiter=',')[:, :-1]
     results = np.genfromtxt('results.csv', delimiter=',')
@@ -379,6 +434,10 @@ def animate(dt, end_time, n_frames, tracked_var: str, xmin, xmax, ymin, ymax, sa
     tracked_var_i = 0
     if tracked_var == 'ke':
         tracked_var_i = 0
+    elif tracked_var == 'pe':
+        tracked_var_i = 1
+    elif tracked_var == 'me':
+        tracked_var_i = 2
 
     bar, = ax_bar.barh(tracked_var.upper(), results[0, tracked_var_i])
     ax_bar.set_xlim(results[:, tracked_var_i].min(), results[:, tracked_var_i].max())
@@ -401,7 +460,7 @@ def animate(dt, end_time, n_frames, tracked_var: str, xmin, xmax, ymin, ymax, sa
     ax.set_ylabel(tracked_var.upper())
     ax.grid()
 
-    if save:
+    if save_animation:
         print('Saving animation...')
         ani.save(filename='animation.gif', writer="pillow")
         fig.savefig('tracked_var.png', dpi=400)

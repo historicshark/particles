@@ -18,7 +18,7 @@ save_animation = False
 def main():
 
     dt = 1e-6
-    end_time = .2
+    end_time = .1
     n_frames = 100
 
     g = np.array([0, -9.81])
@@ -27,7 +27,7 @@ def main():
     sigma = .072
 
     # Particles
-    n_particles = 2
+    n_particles = 10
 
     rho_p = 1.2
 
@@ -44,14 +44,17 @@ def main():
     nx = 20
     ny = 20
 
-    xmin = 0
-    xmax = .005
-    ymin = 0
-    ymax = .005
+    xmin = -.0025
+    xmax = .0025
+    ymin = -.0025
+    ymax = .0025
     walls = np.array([xmin, xmax, ymin, ymax])
 
-    flow_type = 'uniform'
-    parameters = [.01]
+    # flow_type = 'uniform'
+    # parameters = [.01]
+
+    flow_type = 'vortex'
+    parameters = [.001, .01]
 
     global_options()
 
@@ -305,8 +308,19 @@ def interpolate_flow_properties(x, coordinates,  flow_velocity, connectivity):
 
 def interpolate_flow_properties_fast(x, flow_type, parameters):
     if flow_type == 'uniform':
+        # parameters = [velocity-x]
         u_l = np.full(x[:,0].shape, parameters[0])
         v_l = np.zeros(x[:,1].shape)
+    if flow_type == 'vortex':
+        # parameters = [core-diameter, max-tangential-velocity]
+        r = np.sqrt(np.sum(x**2, axis=1))
+        theta = np.arctan2(x[:,1], x[:,0])
+        u_theta = np.zeros_like(r)
+        core = r < parameters[0]
+        u_theta[core] = r[core] * parameters[1] / parameters[0]
+        u_theta[~core] = parameters[0] * parameters[1] / r[~core]
+        u_l = -u_theta * np.sin(theta)
+        v_l = u_theta * np.cos(theta)
     else:
         u_l = np.zeros(x[:,0].shape)
         v_l = np.zeros(x[:,1].shape)
@@ -387,8 +401,8 @@ def particle_properties(n_particles, diameter, diameter_stddev, diameter_min, rh
 def initial_conditions(n_particles, xmin, xmax, ymin, ymax, velocity, velocity_stddev):
     rng = np.random.default_rng()
     middle = 0.7
-    x0 = middle * (xmax - xmin) * rng.random((n_particles,)) + xmin
-    y0 = middle * (ymax - ymin) * rng.random((n_particles,)) + ymin
+    x0 = (xmax - xmin) * ((2 * middle - 1) * rng.random((n_particles,)) + 1 - middle) + xmin
+    y0 = (ymax - ymin) * ((2 * middle - 1) * rng.random((n_particles,)) + 1 - middle) + ymin
     # x0 = np.array((-20,20))
     # y0 = np.zeros((n_particles,))
 

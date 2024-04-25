@@ -6,10 +6,10 @@ from pathlib import Path
 import itertools
 import argparse
 
-drag = False
-gravity = True
+drag_model = 'mei'  # Options: 'none'/'', 'mei', 'tomiyama' + 'pure'/'low'/'high'
+gravity = False
 wall_collisions = True
-particle_collisions = True
+particle_collisions = False
 interpolation = False
 
 save_animation = False
@@ -17,27 +17,28 @@ save_animation = False
 
 def main():
 
-    dt = 0.001
-    end_time = 20
-    n_frames = 1000
+    dt = 1e-6
+    end_time = .5
+    n_frames = 100
 
     g = np.array([0, -9.81])
     mu_l = 1e-3
-    rho_l = 0
+    rho_l = 1000
+    sigma = .072
 
     # Particles
-    n_particles = 200
+    n_particles = 2
 
-    rho_p = 10
+    rho_p = 1.2
 
-    diameter = 7
-    diameter_stddev = 2
-    diameter_min = 1
+    diameter = 200e-6
+    diameter_stddev = 0
+    diameter_min = 50e-6
 
     velocity = 0
-    velocity_stddev = 10
+    velocity_stddev = 0
 
-    epsilon = .7
+    epsilon = .5
 
     # Domain
     nx = 20
@@ -48,14 +49,16 @@ def main():
     # ymin = -.002
     # ymax = .002
 
-    xmin = -100
-    xmax = 100
-    ymin = -100
-    ymax = 100
+    xmin = 0
+    xmax = .005
+    ymin = 0
+    ymax = .005
     walls = np.array([xmin, xmax, ymin, ymax])
 
     flow_type = 'uniform'
-    parameters = [0]
+    parameters = [.01]
+
+    global_options()
 
     # Initialization
     radius, rho_p = particle_properties(n_particles, diameter, diameter_stddev, diameter_min, rho_p)
@@ -175,6 +178,20 @@ def calculate(dt, end_time, n_frames, n_particles, rho_l, mu_l, epsilon, g, wall
     return
 
 
+def global_options():
+    global drag
+    drag = 0
+    if 'mei' in drag_model.lower():
+        drag = 1
+    elif 'tomiyama' in drag_model.lower():
+        drag = 2
+        if 'low' in drag_model.lower():
+            drag = 3
+        elif 'high' in drag_model.lower():
+            drag = 4
+    return
+
+
 def magnitude(a):
     return np.sqrt(np.sum(a*a, axis=1))
 
@@ -195,17 +212,25 @@ def reynolds_number(u_rel, radius, rho_l, mu_l):
     return 2 * rho_l * magnitude(u_rel) * radius / mu_l
 
 
-def drag_coefficient(re):
-    cd = 24.0 / re * (2.0 / 3.0 + 1.0 / (12.0 / re + 3.0 / 4.0 * (1 + 3.315 / np.sqrt(re))))
-    cd[re < 1e-8] = 0.0
+def eotvos_number(g, rho_p, rho_l, radius, sigma):
+    return g[1] * np.abs(rho_l - rho_p) * (2 * radius)**2 / sigma
+
+
+def drag_coefficient_mei(re):
+    cd = 24.0 / re * (2.0 / 3.0 + (12.0 / re + 3.0 / 4.0 * (1 + 3.315 / np.sqrt(re)))**(-1))
+    cd[cd > 200] = 200
     return cd
 
 
+# def drag_coefficient_tomiyama(re, eo):
+
+
 def drag_acceleration(particle_velocity, flow_velocity, radius, rho_l, mu_l, m):
-    u_rel = particle_velocity - flow_velocity
+    u_rel = flow_velocity - particle_velocity
     re = reynolds_number(u_rel, radius, rho_l, mu_l)
-    cd = drag_coefficient(re)
-    return 0.5 * rho_l * magnitude(u_rel) * u_rel * area_xs(radius) * cd / m
+    cd = drag_coefficient_mei(re)
+    tmp = 0.5 * rho_l * magnitude(u_rel) * area_xs(radius) * cd / m
+    return tmp[:,np.newaxis] * u_rel
 
 
 def buoyancy_acceleration(rho_p, rho_l, g):
@@ -310,7 +335,6 @@ def integrate_rk4(dt, x_n, u_n, flow_velocity, radius, rho_p, m, epsilon, rho_l,
     collision_loc = np.logical_or(np.any(wall_collision, axis=1),
                                   np.any(particle_collision, axis=1))
 
-    # if not np.any(wall_collision):
     k1u = apply_accelerations(x_n,           u_n,           flow_velocity, radius, rho_p, m, epsilon, rho_l, mu_l, g, wall_collision, particle_collision, dt) * dt
     k1x = u_n * dt
 
@@ -328,9 +352,6 @@ def integrate_rk4(dt, x_n, u_n, flow_velocity, radius, rho_p, m, epsilon, rho_l,
 
     u[~collision_loc] = u_n[~collision_loc] + (k1u[~collision_loc] + 2 * (k2u[~collision_loc] + k3u[~collision_loc]) + k4u[~collision_loc]) / 6
     x[~collision_loc] = x_n[~collision_loc] + (k1x[~collision_loc] + 2 * (k2x[~collision_loc] + k3x[~collision_loc]) + k4x[~collision_loc]) / 6
-
-    # else:
-    #     x, u = integrate_euler(dt, x_n, u_n, flow_velocity, radius, rho_p, m, epsilon, rho_l, mu_l, g, wall_collision, particle_collision)
 
     return x, u
 
@@ -359,9 +380,9 @@ def particle_properties(n_particles, diameter, diameter_stddev, diameter_min, rh
 
 def initial_conditions(n_particles, xmin, xmax, ymin, ymax, velocity, velocity_stddev):
     rng = np.random.default_rng()
-    middle = 0.9
-    x0 = middle * ((xmax - xmin) * rng.random((n_particles,)) - (xmax - xmin) / 2)
-    y0 = middle * ((ymax - ymin) * rng.random((n_particles,)) - (ymax - ymin) / 2)
+    middle = 0.7
+    x0 = middle * (xmax - xmin) * rng.random((n_particles,)) + xmin
+    y0 = middle * (ymax - ymin) * rng.random((n_particles,)) + ymin
     # x0 = np.array((-20,20))
     # y0 = np.zeros((n_particles,))
 

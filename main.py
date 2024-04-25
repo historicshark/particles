@@ -6,7 +6,7 @@ from pathlib import Path
 import itertools
 import argparse
 
-drag_model = 'mei'  # Options: 'none'/'', 'mei', 'tomiyama' + 'pure'/'low'/'high'
+drag_model = 'tomiyama-pure'  # Options: 'none'/'', 'mei', 'tomiyama' + 'pure'/'low'/'high'
 gravity = False
 wall_collisions = True
 particle_collisions = False
@@ -18,7 +18,7 @@ save_animation = False
 def main():
 
     dt = 1e-6
-    end_time = .5
+    end_time = .2
     n_frames = 100
 
     g = np.array([0, -9.81])
@@ -43,11 +43,6 @@ def main():
     # Domain
     nx = 20
     ny = 20
-
-    # xmin = -.002
-    # xmax = .002
-    # ymin = -.002
-    # ymax = .002
 
     xmin = 0
     xmax = .005
@@ -85,7 +80,7 @@ def main():
     np.savetxt('con.csv', connectivity)
     np.savetxt('background_flow.csv', background_flow)
 
-    calculate(dt, end_time, n_frames, n_particles, rho_l, mu_l, epsilon, g, walls, flow_type, parameters)
+    calculate(dt, end_time, n_frames, n_particles, rho_l, mu_l, epsilon, g, sigma, walls, flow_type, parameters)
 
     if gravity:
         tracked_var = 'me'
@@ -97,7 +92,7 @@ def main():
     return
 
 
-def calculate(dt, end_time, n_frames, n_particles, rho_l, mu_l, epsilon, g, walls, flow_type, parameters):
+def calculate(dt, end_time, n_frames, n_particles, rho_l, mu_l, epsilon, g, sigma, walls, flow_type, parameters):
     radius = np.genfromtxt('radius.csv')
     rho_p = np.genfromtxt('rho_p.csv')
     x = np.genfromtxt('x.csv')
@@ -140,8 +135,8 @@ def calculate(dt, end_time, n_frames, n_particles, rho_l, mu_l, epsilon, g, wall
         wall_collision = detect_wall_contact(x, radius, walls)
         particle_collision = detect_particle_contact(x, radius)
 
-        # x, u = integrate_euler(dt, x_n, u_n, flow_velocity, radius, rho_p, mass, epsilon, rho_l, mu_l, g, wall_collision, particle_collision)
-        x, u = integrate_rk4(dt, x_n, u_n, flow_velocity, radius, rho_p, mass, epsilon, rho_l, mu_l, g, wall_collision, particle_collision)
+        # x, u = integrate_euler(dt, x_n, u_n, flow_velocity, radius, rho_p, mass, epsilon, rho_l, mu_l, g, sigma, wall_collision, particle_collision)
+        x, u = integrate_rk4(dt, x_n, u_n, flow_velocity, radius, rho_p, mass, epsilon, rho_l, mu_l, g, sigma, wall_collision, particle_collision)
         x_n = x
         u_n = u
 
@@ -213,7 +208,7 @@ def reynolds_number(u_rel, radius, rho_l, mu_l):
 
 
 def eotvos_number(g, rho_p, rho_l, radius, sigma):
-    return g[1] * np.abs(rho_l - rho_p) * (2 * radius)**2 / sigma
+    return -g[1] * np.abs(rho_l - rho_p) * (2 * radius)**2 / sigma
 
 
 def drag_coefficient_mei(re):
@@ -222,14 +217,25 @@ def drag_coefficient_mei(re):
     return cd
 
 
-# def drag_coefficient_tomiyama(re, eo):
+def drag_coefficient_tomiyama(re, eo):
+    if drag == 2:  # pure
+        cd = np.maximum(np.minimum(16 / re * (1 + .15 * re**.687), 48 / re), 8 / 3 * eo / (eo + 4))
+    elif drag == 3:  # low contamination
+        cd = np.maximum(np.minimum(24 / re * (1 + .15 * re**.687), 72 / re), 8 / 3 * eo / (eo + 4))
+    else:  # high contamination
+        cd = np.maximum(24 / re * (1 + .15 * re)**.687, 8 / 3 * eo / (eo + 4))
+    cd[cd > 200] = 200
+    return cd
 
-
-def drag_acceleration(particle_velocity, flow_velocity, radius, rho_l, mu_l, m):
+def drag_acceleration(particle_velocity, flow_velocity, radius, rho_l, mu_l, mass, g, rho_p, sigma):
     u_rel = flow_velocity - particle_velocity
     re = reynolds_number(u_rel, radius, rho_l, mu_l)
-    cd = drag_coefficient_mei(re)
-    tmp = 0.5 * rho_l * magnitude(u_rel) * area_xs(radius) * cd / m
+    if drag == 1:
+        cd = drag_coefficient_mei(re)
+    else:
+        eo = eotvos_number(g, rho_p, rho_l, radius, sigma)
+        cd = drag_coefficient_tomiyama(re, eo)
+    tmp = 0.5 * rho_l * magnitude(u_rel) * area_xs(radius) * cd / mass
     return tmp[:,np.newaxis] * u_rel
 
 
@@ -308,10 +314,10 @@ def interpolate_flow_properties_fast(x, flow_type, parameters):
     return np.stack((u_l, v_l), axis=1)
 
 
-def apply_accelerations(particle_position, particle_velocity, flow_velocity, radius, rho_p, mass, epsilon, rho_l, mu_l, g, wall_collision, particle_collision, dt):
+def apply_accelerations(particle_position, particle_velocity, flow_velocity, radius, rho_p, mass, epsilon, rho_l, mu_l, g, sigma, wall_collision, particle_collision, dt):
     a = np.zeros(particle_velocity.shape)
     if drag:
-        a += drag_acceleration(particle_velocity, flow_velocity, radius, rho_l, mu_l, mass)
+        a += drag_acceleration(particle_velocity, flow_velocity, radius, rho_l, mu_l, mass, g, rho_p, sigma)
     if gravity:
         a += buoyancy_acceleration(rho_p, rho_l, g)
     if particle_collisions:
@@ -321,30 +327,30 @@ def apply_accelerations(particle_position, particle_velocity, flow_velocity, rad
     return a
 
 
-def integrate_euler(dt, x_n, u_n, flow_velocity, radius, rho_p, m, epsilon, rho_l, mu_l, g, wall_collision, particle_collision):
-    a1 = apply_accelerations(x_n, u_n, flow_velocity, radius, rho_p, m, epsilon, rho_l, mu_l, g, wall_collision, particle_collision, dt)
+def integrate_euler(dt, x_n, u_n, flow_velocity, radius, rho_p, mass, epsilon, rho_l, mu_l, g, sigma, wall_collision, particle_collision):
+    a1 = apply_accelerations(x_n, u_n, flow_velocity, radius, rho_p, mass, epsilon, rho_l, mu_l, g, sigma, wall_collision, particle_collision, dt)
     u = u_n + a1 * dt
     x = 0.5 * a1 * dt**2 + u * dt + x_n
     return x, u
 
 
-def integrate_rk4(dt, x_n, u_n, flow_velocity, radius, rho_p, m, epsilon, rho_l, mu_l, g, wall_collision, particle_collision):
+def integrate_rk4(dt, x_n, u_n, flow_velocity, radius, rho_p, mass, epsilon, rho_l, mu_l, g, sigma, wall_collision, particle_collision):
     u = np.zeros_like(u_n)
     x = np.zeros_like(x_n)
 
     collision_loc = np.logical_or(np.any(wall_collision, axis=1),
                                   np.any(particle_collision, axis=1))
 
-    k1u = apply_accelerations(x_n,           u_n,           flow_velocity, radius, rho_p, m, epsilon, rho_l, mu_l, g, wall_collision, particle_collision, dt) * dt
+    k1u = apply_accelerations(x_n, u_n, flow_velocity, radius, rho_p, mass, epsilon, rho_l, mu_l, g, sigma, wall_collision, particle_collision, dt) * dt
     k1x = u_n * dt
 
-    k2u = apply_accelerations(x_n + k1x / 2, u_n + k1u / 2, flow_velocity, radius, rho_p, m, epsilon, rho_l, mu_l, g, wall_collision, particle_collision, dt) * dt
+    k2u = apply_accelerations(x_n + k1x / 2, u_n + k1u / 2, flow_velocity, radius, rho_p, mass, epsilon, rho_l, mu_l, g, sigma, wall_collision, particle_collision, dt) * dt
     k2x = (u_n + k1u / 2) * dt
 
-    k3u = apply_accelerations(x_n + k2x / 2, u_n + k2u / 2, flow_velocity, radius, rho_p, m, epsilon, rho_l, mu_l, g, wall_collision, particle_collision, dt) * dt
+    k3u = apply_accelerations(x_n + k2x / 2, u_n + k2u / 2, flow_velocity, radius, rho_p, mass, epsilon, rho_l, mu_l, g, sigma, wall_collision, particle_collision, dt) * dt
     k3x = (u_n + k2u / 2) * dt
 
-    k4u = apply_accelerations(x_n + k3x,     u_n + k3u,     flow_velocity, radius, rho_p, m, epsilon, rho_l, mu_l, g, wall_collision, particle_collision, dt) * dt
+    k4u = apply_accelerations(x_n + k3x, u_n + k3u, flow_velocity, radius, rho_p, mass, epsilon, rho_l, mu_l, g, sigma, wall_collision, particle_collision, dt) * dt
     k4x = (u_n + k3u) * dt
 
     u[collision_loc] = u_n[collision_loc] + k1u[collision_loc]

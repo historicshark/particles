@@ -128,17 +128,19 @@ def calculate(dt, end_time, n_frames, n_particles, rho_l, mu_l, epsilon, g, sigm
     results_file = open('results.csv', 'w')
     radius_file = open('radius.csv', 'w')
     for t_step in t:
+        if np.any(np.abs(x) > .0025 - 100e-6):
+            print('wall2')
 
         if interpolation:
             flow_velocity = interpolate_flow_properties(x, coordinates, background_flow, connectivity)
         else:
             flow_velocity = interpolate_flow_properties_fast(x, flow_type, parameters)
 
-        wall_collision = detect_wall_contact(x, radius, walls)
+        wall_collision, overlap = detect_wall_contact(x, radius, walls)
         particle_collision = detect_particle_contact(x, radius)
 
-        # if np.any(wall_collision):
-        #     print('wall')
+        if np.any(wall_collision):
+            print('wall')
 
         # x, u = integrate_euler(dt, x_n, u_n, flow_velocity, radius, rho_p, mass, epsilon, rho_l, mu_l, g, sigma, wall_collision, particle_collision)
         x, u = integrate_rk4(dt, x_n, u_n, flow_velocity, radius, rho_p, mass, epsilon, rho_l, mu_l, g, sigma, wall_collision, particle_collision)
@@ -249,19 +251,24 @@ def acceleration_gravity(rho_p, rho_l, g):
 
 
 def detect_wall_contact(x, radius, walls):
-    collision_xmin = radius > x[:,0] - walls[0]
-    collision_xmax = radius > walls[1] - x[:,0]
-    collision_ymin = radius > x[:,1] - walls[2]
-    collision_ymax = radius > walls[3] - x[:,1]
-    return np.stack((collision_xmin, collision_xmax, collision_ymin, collision_ymax), axis=1)
+    overlap = np.stack((
+        radius - (x[:,0] - walls[0]),
+        radius - (walls[1] - x[:,0]),
+        radius - (x[:,1] - walls[2]),
+        radius - (walls[3] - x[:,1])
+    ), axis=1)
+
+    wall_collision = overlap > 0
+
+    return wall_collision, overlap[wall_collision]
 
 
-def acceleration_wall_collision_rigid(wall_collision, velocity, epsilon, dt):
-    a = -(1 + epsilon) * velocity[wall_collision] / dt
+def acceleration_wall_collision_rigid(wall_collision_rigid_loc, velocity, epsilon, dt):
+    a = -(1 + epsilon) * velocity[wall_collision_rigid_loc] / dt
     return a
 
 
-# def acceleration_wall_collision_spring(wall_collision, position, velocity, radius):
+# def acceleration_wall_collision_spring(wall_collision, walls, position, velocity, radius):
 #     distance =
 
 

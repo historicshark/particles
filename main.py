@@ -5,35 +5,85 @@ import pandas as pd
 from pathlib import Path
 import itertools
 import argparse
+import cProfile
+import re
 
+from other import magnitude
+
+#############################
+# Simulation Options
+#############################
 drag_model = ''  # Options: 'none'/'', 'mei', 'tomiyama' + 'pure'/'low'/'high'
-collision_model = 1    # Options: 0: off, 1: spring, 2: simple (-1: rigid)
+collision_model = 2    # Options: 0: off, 1: spring, 2: simple (-1: rigid)
 particle_collisions = True
-gravity = True
+gravity = False
 wall_collisions = True
 interpolation = False
 
 save_animation = False
 
+#############################
+# Process options and imports
+#############################
+drag = False
+if drag_model == '' or drag_model == 'none':
+    from other import drag_coefficient_none as drag_coefficient
+elif drag_model == 'mei':
+    drag = True
+    from mei import drag_coefficient_mei as drag_coefficient
+elif 'tomiyama' in drag_model:
+    drag = True
+    if 'low' in drag_model:
+        from tomiyama import drag_coefficient_tomiyama_low as drag_coefficient
+    elif 'high' in drag_model:
+        from tomiyama import drag_coefficient_tomiyama_high as drag_coefficient
+    else:
+        from tomiyama import drag_coefficient_tomiyama_pure as drag_coefficient
+else:
+    raise ValueError('drag model')
+
+if collision_model == 0:
+    from rigid import acceleration_wall_collision_rigid as acceleration_wall_collision
+    if particle_collisions:
+        from rigid import acceleration_particle_collision_rigid as acceleration_particle_collision
+    else:
+        from other import acceleration_particle_collision_none as acceleration_particle_collision
+elif collision_model == 1:
+    from spring import acceleration_wall_collision_spring as acceleration_wall_collision
+    if particle_collisions:
+        from spring import acceleration_particle_collision_spring as acceleration_particle_collision
+    else:
+        from other import acceleration_particle_collision_none as acceleration_particle_collision
+elif collision_model == 2:
+    from simple import acceleration_wall_collision_simple as acceleration_wall_collision
+    if particle_collisions:
+        from simple import acceleration_particle_collision_simple as acceleration_particle_collision
+    else:
+        from other import acceleration_particle_collision_none as acceleration_particle_collision
+else:
+    raise ValueError('collision model')
+
+np.seterr(divide='ignore')
+
 
 def main():
-
-    dt = 1e-5
-    end_time = 2
-    n_frames = 300
+    dt = 1e-6
+    end_time = .5
+    n_frames = 500
 
     g = np.array([0, -9.81])
     mu_l = 1e-3
-    rho_l = 0
+    rho_l = 1000
     sigma = .072
 
     # Particles
-    n_particles = 20
+    n_particles = 10
 
     rho_p = 1.2
+    mu_p = 1e-5
 
     diameter = 200e-6
-    diameter_stddev = 0
+    diameter_stddev = 25e-6
     diameter_min = 50e-6
 
     velocity = 0
@@ -52,15 +102,13 @@ def main():
     walls = np.array([xmin, xmax, ymin, ymax])
 
     flow_type = 'uniform'
-    parameters = [.03]
+    parameters = [.02]
 
     # flow_type = 'vortex'
     # parameters = [.001, .005]
 
     # flow_type = 'test'
     # parameters = [.05]
-
-    global_options()
 
     # Initialization
     radius, rho_p = particle_properties(n_particles, diameter, diameter_stddev, diameter_min, rho_p)
@@ -87,19 +135,19 @@ def main():
     np.savetxt('con.csv', connectivity)
     np.savetxt('background_flow.csv', background_flow)
 
-    calculate(dt, end_time, n_frames, n_particles, rho_l, mu_l, epsilon, g, sigma, walls, flow_type, parameters)
+    calculate(dt, end_time, n_frames, n_particles, rho_l, mu_l, mu_p, epsilon, g, sigma, walls, flow_type, parameters)
 
     if gravity:
         tracked_var = 'me'
     else:
         tracked_var = 'ke'
 
-    animate(dt, end_time, n_frames, tracked_var, xmin, xmax, ymin, ymax)
+    animate(tracked_var, xmin, xmax, ymin, ymax)
 
     return
 
 
-def calculate(dt, end_time, n_frames, n_particles, rho_l, mu_l, epsilon, g, sigma, walls, flow_type, parameters):
+def calculate(dt, end_time, n_frames, n_particles, rho_l, mu_l, mu_p, epsilon, g, sigma, walls, flow_type, parameters):
     radius = np.genfromtxt('radius.csv')
     rho_p = np.genfromtxt('rho_p.csv')
     x = np.genfromtxt('x.csv')
@@ -110,7 +158,7 @@ def calculate(dt, end_time, n_frames, n_particles, rho_l, mu_l, epsilon, g, sigm
     connectivity = np.genfromtxt('con.csv', dtype=int)
     background_flow = np.genfromtxt('background_flow.csv')
 
-    mass = calculate_mass(radius, rho_p)
+    mass = calculate_mass(radius, rho_p, rho_l)
 
     t = np.arange(0, end_time, dt)
     n_t = len(t)
@@ -139,8 +187,8 @@ def calculate(dt, end_time, n_frames, n_particles, rho_l, mu_l, epsilon, g, sigm
         else:
             flow_velocity = interpolate_flow_properties_fast(x, flow_type, parameters)
 
-        # x, u = integrate_euler(dt, x_n, u_n, flow_velocity, radius, rho_p, mass, epsilon, rho_l, mu_l, g, sigma, wall_collision, particle_collision, overlap, particle_collision_loc)
-        x, u = integrate_rk4(dt, x_n, u_n, flow_velocity, radius, rho_p, mass, epsilon, rho_l, mu_l, g, sigma, walls)
+        # x, u = integrate_euler(dt, x_n, u_n, flow_velocity, radius, rho_p, mass, epsilon, rho_l, mu_l, mu_p, g, sigma, wall_collision, particle_collision, overlap, particle_collision_loc)
+        x, u = integrate_rk4(dt, x_n, u_n, flow_velocity, radius, rho_p, mass, epsilon, rho_l, mu_l, mu_p, g, sigma, walls)
         x_n = x
         u_n = u
 
@@ -177,24 +225,6 @@ def calculate(dt, end_time, n_frames, n_particles, rho_l, mu_l, epsilon, g, sigm
     return
 
 
-def global_options():
-    global drag
-    drag = 0
-    if 'mei' in drag_model.lower():
-        drag = 1
-    elif 'tomiyama' in drag_model.lower():
-        drag = 2
-        if 'low' in drag_model.lower():
-            drag = 3
-        elif 'high' in drag_model.lower():
-            drag = 4
-    return
-
-
-def magnitude(a):
-    return np.sqrt(np.sum(a*a, axis=1))
-
-
 def area_xs(radius):
     return np.pi * radius**2
 
@@ -203,8 +233,8 @@ def volume(radius):
     return 4.0 / 3.0 * np.pi * radius**3
 
 
-def calculate_mass(radius, rho_p):
-    return rho_p * volume(radius)
+def calculate_mass(radius, rho_p, rho_l):
+    return (rho_p + 0.5 * rho_l) * volume(radius)
 
 
 def reynolds_number(u_rel, radius, rho_l, mu_l):
@@ -215,30 +245,11 @@ def eotvos_number(g, rho_p, rho_l, radius, sigma):
     return -g[1] * np.abs(rho_l - rho_p) * (2 * radius)**2 / sigma
 
 
-def drag_coefficient_mei(re):
-    cd = 24.0 / re * (2.0 / 3.0 + (12.0 / re + 3.0 / 4.0 * (1 + 3.315 / np.sqrt(re)))**(-1))
-    cd[cd > 200] = 200
-    return cd
-
-
-def drag_coefficient_tomiyama(re, eo):
-    if drag == 2:  # pure
-        cd = np.maximum(np.minimum(16 / re * (1 + .15 * re**.687), 48 / re), 8 / 3 * eo / (eo + 4))
-    elif drag == 3:  # low contamination
-        cd = np.maximum(np.minimum(24 / re * (1 + .15 * re**.687), 72 / re), 8 / 3 * eo / (eo + 4))
-    else:  # high contamination
-        cd = np.maximum(24 / re * (1 + .15 * re)**.687, 8 / 3 * eo / (eo + 4))
-    cd[cd > 200] = 200
-    return cd
-
 def acceleration_drag(particle_velocity, flow_velocity, radius, rho_l, mu_l, mass, g, rho_p, sigma):
     u_rel = flow_velocity - particle_velocity
     re = reynolds_number(u_rel, radius, rho_l, mu_l)
-    if drag == 1:
-        cd = drag_coefficient_mei(re)
-    else:
-        eo = eotvos_number(g, rho_p, rho_l, radius, sigma)
-        cd = drag_coefficient_tomiyama(re, eo)
+    eo = eotvos_number(g, rho_p, rho_l, radius, sigma)
+    cd = drag_coefficient(re, eo)
     tmp = 0.5 * rho_l * magnitude(u_rel) * area_xs(radius) * cd / mass
     return tmp[:,np.newaxis] * u_rel
 
@@ -260,28 +271,6 @@ def detect_wall_contact(x, radius, walls):
     return wall_collision[wall_collision_loc], overlap[wall_collision_loc], wall_collision_loc
 
 
-def acceleration_wall_collision_rigid(wall_collision_rigid_loc, velocity, epsilon, dt):
-    a = -(1 + epsilon) * velocity[wall_collision_rigid_loc] / dt
-    return a
-
-
-def acceleration_wall_collision_spring(wall_collision, wall_collision_loc, wall_overlap, velocity, mass):
-    """
-    wall_collision_loc: (n_contacting, 4)
-    walls: (xmin, xmax, ymin, ymax)
-    wall_overlap: (n_contacting, 4)
-    """
-    a = np.zeros((np.sum(wall_collision_loc), 2))
-    k = 1e-3
-    c = 1e-10
-    n = np.array([(1,0), (-1,0), (0,1), (0,-1)])
-    for i, (wc, loc, dx, u, m) in enumerate(zip(wall_collision, np.any(np.hsplit(wall_collision,2), axis=2).transpose(), wall_overlap, velocity[wall_collision_loc], mass[wall_collision_loc])):
-        f_k = (k * dx[wc]) / m
-        f_c = -(c * np.sum(np.broadcast_to(u, n[wc].shape) * n[wc], axis=1)) / m
-        a[i] = np.sum(n[wc] * (f_k + f_c), axis=0)
-    return a
-
-
 def detect_particle_contact(position, radius):
     particle_collision = np.full((len(position), len(position)), False)
 
@@ -291,41 +280,6 @@ def detect_particle_contact(position, radius):
         particle_collision[i,i] = False
     particle_collision_loc = np.any(particle_collision, axis=1)
     return particle_collision[particle_collision_loc], particle_collision_loc
-
-
-def acceleration_particle_collision_rigid(particle_collision, particle_collision_loc, position, velocity, epsilon, mass, dt):
-    a = np.zeros((np.sum(particle_collision_loc), 2))
-    for i, (x, u, m, loc) in enumerate(zip(position[particle_collision_loc], velocity[particle_collision_loc], mass[particle_collision_loc], particle_collision)):
-        distance_vector = position[loc] - x
-        n = distance_vector / np.sqrt(np.sum(distance_vector * distance_vector, axis=1))[:,np.newaxis]
-        u_prime = u + n * (np.sum((velocity[loc] - u) * n, axis=1) * (1 + epsilon) * mass[loc] / (mass[loc] + m))[:,np.newaxis]
-        a[i] = np.sum((u_prime - u) / dt, axis=0)
-    return a
-
-
-def acceleration_particle_collision_spring(particle_collision, particle_collision_loc, position, velocity, radius, mass):
-    a = np.zeros((np.sum(particle_collision_loc), 2))
-    k = 1e-5
-    c = 1e-10
-    for i, (x, u, r, m, loc) in enumerate(zip(position[particle_collision_loc], velocity[particle_collision_loc], radius[particle_collision_loc], mass[particle_collision_loc], particle_collision)):
-        distance_vector = position[loc] - x
-        distance = magnitude(distance_vector)
-        n = distance_vector / np.sqrt(np.sum(distance_vector * distance_vector, axis=1))[:, np.newaxis]
-        overlap = (r + radius[loc] - distance) / 2
-        f_k = (k * overlap) / m
-        f_c = (c * np.dot(u, n[0])) / m
-        a[i] = np.sum(-n * (f_k + f_c)[:,np.newaxis], axis=0)
-    return a
-
-
-# def h0(mu_l, mu_p, radius, sigma, wall_):
-
-
-
-# def
-
-
-# def acceleration_particle_collision_simple(particle_collision, particle_collision_loc, position)
 
 
 def in_cell(x, vertices):
@@ -380,7 +334,7 @@ def interpolate_flow_properties_fast(x, flow_type, parameters):
     return np.stack((u_l, v_l), axis=1)
 
 
-def apply_accelerations(position, velocity, flow_velocity, radius, rho_p, mass, epsilon, rho_l, mu_l, g, sigma, walls, dt):
+def apply_accelerations(position, velocity, flow_velocity, radius, rho_p, mass, epsilon, rho_l, mu_l, mu_p, g, sigma, walls, dt):
     wall_collision, wall_overlap, wall_collision_loc = detect_wall_contact(position, radius, walls)
     particle_collision, particle_collision_loc = detect_particle_contact(position, radius)
 
@@ -390,46 +344,69 @@ def apply_accelerations(position, velocity, flow_velocity, radius, rho_p, mass, 
     if gravity:
         a += acceleration_gravity(rho_p, rho_l, g)
     if particle_collisions:
-        if collision_model == -1:
-            a[particle_collision_loc] += acceleration_particle_collision_rigid(particle_collision, particle_collision_loc, position, velocity, epsilon, mass, dt)
-        elif collision_model == 1:
-            a[particle_collision_loc] += acceleration_particle_collision_spring(particle_collision, particle_collision_loc, position, velocity, radius, mass)
+        a[particle_collision_loc] += acceleration_particle_collision(particle_collision,
+                                                                     particle_collision_loc,
+                                                                     position,
+                                                                     velocity,
+                                                                     radius,
+                                                                     mass,
+                                                                     mu_l,
+                                                                     mu_p,
+                                                                     sigma,
+                                                                     epsilon,
+                                                                     dt)
+        # if collision_model == -1:
+        #         #     a[particle_collision_loc] += acceleration_particle_collision_rigid(particle_collision, particle_collision_loc, position, velocity, epsilon, mass, dt)
+        #         # elif collision_model == 1:
+        #         #     a[particle_collision_loc]+= acceleration_particle_collision_spring(particle_collision, particle_collision_loc, position, velocity, radius, mass)
     if wall_collisions:
-        if collision_model in [-1,2]:
-            wall_collision_rigid_loc = np.any(np.hsplit(wall_collision,2), axis=2).transpose()
-            a[wall_collision_rigid_loc] = acceleration_wall_collision_rigid(wall_collision_rigid_loc, velocity[wall_collision_loc], epsilon, dt)
-        elif collision_model == 1:
-            a[wall_collision_loc] = acceleration_wall_collision_spring(wall_collision, wall_collision_loc, wall_overlap, velocity, mass)
+        a[wall_collision_loc] += acceleration_wall_collision(wall_collision,
+                                                             wall_collision_loc,
+                                                             wall_overlap,
+                                                             position,
+                                                             velocity,
+                                                             radius,
+                                                             mass,
+                                                             mu_p,
+                                                             mu_l,
+                                                             sigma,
+                                                             epsilon,
+                                                             dt)
+        # if collision_model in [-1,2]:
+        #     wall_collision_rigid_loc = np.any(np.hsplit(wall_collision,2), axis=2).transpose()
+        #     a[wall_collision_rigid_loc] = acceleration_wall_collision_rigid(wall_collision_rigid_loc, velocity[wall_collision_loc], epsilon, dt)
+        # elif collision_model == 1:
+        #     a[wall_collision_loc] = acceleration_wall_collision_spring(wall_collision, wall_collision_loc, wall_overlap, velocity, mass)
     return a
 
 
-def integrate_euler(dt, x_n, u_n, flow_velocity, radius, rho_p, mass, epsilon, rho_l, mu_l, g, sigma, wall_collision, wall_overlap, particle_collision):
+def integrate_euler(dt, x_n, u_n, flow_velocity, radius, rho_p, mass, epsilon, rho_l, mu_l, mu_p, g, sigma, wall_collision, wall_overlap, particle_collision):
     a1 = apply_accelerations(x_n, u_n, flow_velocity, radius, rho_p, mass, epsilon, rho_l, mu_l, g, sigma, wall_collision, particle_collision, dt)
     u = u_n + a1 * dt
     x = 0.5 * a1 * dt**2 + u * dt + x_n
     return x, u
 
 
-def integrate_rk4(dt, x_n, u_n, flow_velocity, radius, rho_p, mass, epsilon, rho_l, mu_l, g, sigma, walls):
+def integrate_rk4(dt, x_n, u_n, flow_velocity, radius, rho_p, mass, epsilon, rho_l, mu_l, mu_p, g, sigma, walls):
     u = np.zeros_like(u_n)
     x = np.zeros_like(x_n)
 
     # collision_loc = np.logical_or(wall_collision_loc, particle_collision_loc)
 
     k1u = apply_accelerations(x_n, u_n,
-                              flow_velocity, radius, rho_p, mass, epsilon, rho_l, mu_l, g, sigma, walls, dt) * dt
+                              flow_velocity, radius, rho_p, mass, epsilon, rho_l, mu_l, mu_p, g, sigma, walls, dt) * dt
     k1x = u_n * dt
 
     k2u = apply_accelerations(x_n + k1x / 2, u_n + k1u / 2,
-                              flow_velocity, radius, rho_p, mass, epsilon, rho_l, mu_l, g, sigma, walls, dt) * dt
+                              flow_velocity, radius, rho_p, mass, epsilon, rho_l, mu_l, mu_p, g, sigma, walls, dt) * dt
     k2x = (u_n + k1u / 2) * dt
 
     k3u = apply_accelerations(x_n + k2x / 2, u_n + k2u / 2,
-                              flow_velocity, radius, rho_p, mass, epsilon, rho_l, mu_l, g, sigma, walls, dt) * dt
+                              flow_velocity, radius, rho_p, mass, epsilon, rho_l, mu_l, mu_p, g, sigma, walls, dt) * dt
     k3x = (u_n + k2u / 2) * dt
 
     k4u = apply_accelerations(x_n + k3x, u_n + k3u,
-                              flow_velocity, radius, rho_p, mass, epsilon, rho_l, mu_l, g, sigma, walls, dt) * dt
+                              flow_velocity, radius, rho_p, mass, epsilon, rho_l, mu_l, mu_p, g, sigma, walls, dt) * dt
     k4x = (u_n + k3u) * dt
 
     # u[collision_loc] = u_n[collision_loc] + k1u[collision_loc]
@@ -484,11 +461,12 @@ def initial_conditions(n_particles, xmin, xmax, ymin, ymax, velocity, velocity_s
         x0 = np.array((xmin/2,xmax/2))
         y0 = np.full_like(x0, midy)
         x0 = np.stack((x0, y0), axis=1)
-    # u0 = rng.normal(velocity, velocity_stddev, (n_particles,))
+        u0 = np.array(((parameters[0],0),(-parameters[0],0)))
+
+    # u0 = rng.normal(velocity, velocity_stddev, (n_particles,2))
     # v0 = rng.normal(velocity, velocity_stddev, (n_particles,))
 
     # u0 = np.zeros((n_particles,))
-    # u0 = np.array((10,-10))
     # v0 = np.zeros((n_particles,))
 
     return x0, u0
@@ -531,7 +509,7 @@ def calculate_background_flow(xmin, xmax, ymin, ymax, nx, ny, flow_type, paramet
     return coor, con, u_l
 
 
-def animate(dt, end_time, n_frames, tracked_var: str, xmin, xmax, ymin, ymax) -> None:
+def animate(tracked_var: str, xmin, xmax, ymin, ymax) -> None:
     time = np.loadtxt('t.csv')
     position = np.genfromtxt('position.csv', delimiter=',')[:, :-1]
     results = np.genfromtxt('results.csv', delimiter=',')
@@ -565,7 +543,7 @@ def animate(dt, end_time, n_frames, tracked_var: str, xmin, xmax, ymin, ymax) ->
         tracked_var_i = 2
 
     bar, = ax_bar.barh(tracked_var.upper(), results[0, tracked_var_i])
-    ax_bar.set_xlim(results[:, tracked_var_i].min(), results[:, tracked_var_i].max())
+    # ax_bar.set_xlim(results[:, tracked_var_i].min(), results[:, tracked_var_i].max())
 
     def update(frame):
         for i_particle, (r, particle) in enumerate(zip(rp[frame], particles)):
@@ -576,8 +554,7 @@ def animate(dt, end_time, n_frames, tracked_var: str, xmin, xmax, ymin, ymax) ->
         return particles
 
     n_time = len(time)
-    frames = np.linspace(0, n_time - 1, n_frames).astype(int)
-    ani = animation.FuncAnimation(fig=fig, func=update, frames=frames, interval=1)
+    ani = animation.FuncAnimation(fig=fig, func=update, frames=n_time, interval=1)
 
     fig, ax = plt.subplots()
     ax.plot(time, results[:, tracked_var_i])
@@ -596,4 +573,5 @@ def animate(dt, end_time, n_frames, tracked_var: str, xmin, xmax, ymin, ymax) ->
     return
 
 if __name__ == '__main__':
+    # cProfile.run('main()', sort='cumulative')
     main()

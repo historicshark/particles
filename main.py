@@ -13,7 +13,7 @@ from other import magnitude
 #############################
 # Simulation Options
 #############################
-drag_model = ''  # Options: 'none'/'', 'mei', 'tomiyama' + 'pure'/'low'/'high'
+drag_model = 'tomiyama'  # Options: 'none'/'', 'mei', 'tomiyama' + 'pure'/'low'/'high'
 collision_model = 2    # Options: 0: off, 1: spring, 2: simple (-1: rigid)
 particle_collisions = True
 gravity = False
@@ -63,13 +63,15 @@ elif collision_model == 2:
 else:
     raise ValueError('collision model')
 
+from tomiyama import lift_coefficient_tomiyama
+
 np.seterr(divide='ignore')
 
 
 def main():
-    dt = 1e-6
-    end_time = .5
-    n_frames = 500
+    dt = 1e-5
+    end_time = 20
+    n_frames = 10000
 
     g = np.array([0, -9.81])
     mu_l = 1e-3
@@ -77,7 +79,7 @@ def main():
     sigma = .072
 
     # Particles
-    n_particles = 10
+    n_particles = 100
 
     rho_p = 1.2
     mu_p = 1e-5
@@ -101,11 +103,11 @@ def main():
     ymax = .0025
     walls = np.array([xmin, xmax, ymin, ymax])
 
-    flow_type = 'uniform'
-    parameters = [.02]
+    # flow_type = 'uniform'
+    # parameters = [.02]
 
-    # flow_type = 'vortex'
-    # parameters = [.001, .005]
+    flow_type = 'vortex'
+    parameters = [.001, .005]
 
     # flow_type = 'test'
     # parameters = [.05]
@@ -115,7 +117,7 @@ def main():
     x, u = initial_conditions(n_particles, xmin, xmax, ymin, ymax, velocity, velocity_stddev, flow_type, parameters)
 
     # remove overlapping particles
-    particles_to_keep = False
+    particles_to_keep = True
     while not np.all(particles_to_keep):
         n_particles, particles_to_keep = get_overlapping_index(n_particles, radius, x)
 
@@ -243,6 +245,10 @@ def reynolds_number(u_rel, radius, rho_l, mu_l):
 
 def eotvos_number(g, rho_p, rho_l, radius, sigma):
     return -g[1] * np.abs(rho_l - rho_p) * (2 * radius)**2 / sigma
+
+
+def weber_number(rho_l, u_rel, radius, sigma):
+    return rho_l * u_rel**2 * radius / sigma
 
 
 def acceleration_drag(particle_velocity, flow_velocity, radius, rho_l, mu_l, mass, g, rho_p, sigma):

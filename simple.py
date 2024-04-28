@@ -67,6 +67,7 @@ def acceleration_particle_collision_simple(particle_collision,
         a[i] = np.sum(-n * (f_e + f_v)[:, np.newaxis], axis=0) / m
     return a
 
+
 def acceleration_wall_collision_simple(wall_collision,
                                        wall_collision_loc,
                                        wall_overlap,
@@ -82,24 +83,16 @@ def acceleration_wall_collision_simple(wall_collision,
     a = np.zeros((np.sum(wall_collision_loc), 2))
     n = np.array([(1, 0), (-1, 0), (0, 1), (0, -1)])
     for i, (x, u, xov, r, m, loc) in enumerate(zip(position[wall_collision_loc],
-                                              velocity[wall_collision_loc],
-                                              wall_overlap,
-                                              radius[wall_collision_loc],
-                                              mass[wall_collision_loc],
-                                              wall_collision)):
+                                                   velocity[wall_collision_loc],
+                                                   wall_overlap,
+                                                   radius[wall_collision_loc],
+                                                   mass[wall_collision_loc],
+                                                   wall_collision)):
         h0 = fluid_film_thickness(mu_l, mu_p, r, sigma, False)
         deformation = xov[loc] + h0
         f_e = force_elastic_simple(r, deformation, sigma)
-        if xov[loc] > h0:
-            f_v = force_viscous_simple(deformation, h0, r, u, -n[loc], mu_l, False)
-        else:
-            f_v = np.zeros_like(f_e)
-
-        # f_v = np.zeros_like(f_e)
-        # close = xov[loc] > h0
-        # f_v[close] = force_viscous_simple(deformation, h0, r, u, n[loc], mu_l, False)
-        # f_v[~close] = force_viscous_simple_alt(r, u, xov[loc], n[loc], mu_l)
+        close = xov[loc] > h0
+        f_v = np.zeros_like(f_e)
+        f_v[close] = force_viscous_simple(deformation, h0, r, u, -n[loc], mu_l, False)
         a[i] = np.sum(n[loc] * (f_e + f_v), axis=0) / m
     return a
-
-

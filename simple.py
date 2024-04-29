@@ -93,6 +93,6 @@ def acceleration_wall_collision_simple(wall_collision,
         f_e = force_elastic_simple(r, deformation, sigma)
         close = xov[loc] > h0
         f_v = np.zeros_like(f_e)
-        f_v[close] = force_viscous_simple(deformation, h0, r, u, -n[loc], mu_l, False)
+        f_v[close] = force_viscous_simple(deformation[close], h0, r, u, -n[loc][close], mu_l, False)
         a[i] = np.sum(n[loc] * (f_e + f_v), axis=0) / m
     return a

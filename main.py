@@ -18,6 +18,7 @@ collision_model = 2    # Options: 0: off, 1: spring, 2: simple (-1: rigid)
 particle_collisions = True
 gravity = False
 wall_collisions = True
+particle_breakup = True
 interpolation = False
 
 save_animation = False
@@ -63,15 +64,16 @@ elif collision_model == 2:
 else:
     raise ValueError('collision model')
 
-from tomiyama import lift_coefficient_tomiyama
+if particle_breakup:
+    import breakup
 
 np.seterr(divide='ignore')
 
 
 def main():
     dt = 1e-5
-    end_time = 20
-    n_frames = 10000
+    end_time = 1
+    n_frames = 200
 
     g = np.array([0, -9.81])
     mu_l = 1e-3
@@ -188,6 +190,32 @@ def calculate(dt, end_time, n_frames, n_particles, rho_l, mu_l, mu_p, epsilon, g
             flow_velocity = interpolate_flow_properties(x, coordinates, background_flow, connectivity)
         else:
             flow_velocity = interpolate_flow_properties_fast(x, flow_type, parameters)
+
+        # Evaluate breakup
+        if particle_breakup:
+            u_rel = magnitude(flow_velocity - u)
+            we = weber_number(rho_l, u_rel, radius, sigma)
+            eo = eotvos_number(g, rho_p, rho_l, radius, sigma)
+            particles_to_split = breakup.detect_breakup(we, eo)
+
+            n_new = np.sum(particles_to_split)
+            new_radius = np.zeros((n_new,))
+            new_radius_append = np.zeros((n_new,))
+            new_position_append = np.zeros((n_new,2))
+            new_velocity_append = u_n[particles_to_split]
+            for i, (old_radius, old_position) in enumerate(zip(radius[particles_to_split],
+                                                               x[particles_to_split])):
+                print('breakup')
+                new_radius1, new_radius2, new_position2 = breakup.new_bubble(old_radius, old_position)
+                new_radius[i] = new_radius1
+                new_radius_append[i] = new_radius2
+                new_position_append[i] = new_position2
+
+            x_n = np.append(x_n, new_position_append, axis=0)
+            u_n = np.append(u_n, new_velocity_append, axis=0)
+            radius[particles_to_split] = new_radius
+            radius = np.append(radius, new_radius_append)
+
 
         # x, u = integrate_euler(dt, x_n, u_n, flow_velocity, radius, rho_p, mass, epsilon, rho_l, mu_l, mu_p, g, sigma, wall_collision, particle_collision, overlap, particle_collision_loc)
         x, u = integrate_rk4(dt, x_n, u_n, flow_velocity, radius, rho_p, mass, epsilon, rho_l, mu_l, mu_p, g, sigma, walls)

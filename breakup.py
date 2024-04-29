@@ -24,5 +24,5 @@ def new_bubble(r, x):
 
     new_position_magnitude = 1.2 * (r1 + r2)
     vec = rng.random((2,))
-    new_position = new_position_magnitude * vec / np.sqrt(vec @ vec)
+    new_position = new_position_magnitude * vec / np.sqrt(vec @ vec) + x
     return r1, r2, new_position

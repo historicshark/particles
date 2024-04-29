@@ -18,7 +18,8 @@ collision_model = 2    # Options: 0: off, 1: spring, 2: simple (-1: rigid)
 particle_collisions = True
 gravity = False
 wall_collisions = True
-particle_breakup = True
+particle_breakup = False
+particle_coalescence = False
 interpolation = False
 
 save_animation = False
@@ -64,8 +65,8 @@ elif collision_model == 2:
 else:
     raise ValueError('collision model')
 
-if particle_breakup:
-    import breakup
+import breakup
+import coalescence
 
 np.seterr(divide='ignore')
 
@@ -132,14 +133,13 @@ def main():
     coordinates, connectivity, background_flow = calculate_background_flow(xmin, xmax, ymin, ymax, nx, ny, flow_type, parameters)
 
     np.savetxt('radius.csv', radius)
-    np.savetxt('rho_p.csv', rho_p)
     np.savetxt('x.csv', x)
     np.savetxt('u.csv', u)
     np.savetxt('coor.csv', coordinates)
     np.savetxt('con.csv', connectivity)
     np.savetxt('background_flow.csv', background_flow)
 
-    calculate(dt, end_time, n_frames, n_particles, rho_l, mu_l, mu_p, epsilon, g, sigma, walls, flow_type, parameters)
+    calculate(dt, end_time, n_frames, n_particles, rho_p, rho_l, mu_l, mu_p, epsilon, g, sigma, walls, flow_type, parameters)
 
     if gravity:
         tracked_var = 'me'
@@ -151,9 +151,8 @@ def main():
     return
 
 
-def calculate(dt, end_time, n_frames, n_particles, rho_l, mu_l, mu_p, epsilon, g, sigma, walls, flow_type, parameters):
+def calculate(dt, end_time, n_frames, n_particles, rho_p, rho_l, mu_l, mu_p, epsilon, g, sigma, walls, flow_type, parameters):
     radius = np.genfromtxt('radius.csv')
-    rho_p = np.genfromtxt('rho_p.csv')
     x = np.genfromtxt('x.csv')
     x_n = x.copy()
     u = np.genfromtxt('u.csv')
@@ -161,8 +160,6 @@ def calculate(dt, end_time, n_frames, n_particles, rho_l, mu_l, mu_p, epsilon, g
     coordinates = np.genfromtxt('coor.csv')
     connectivity = np.genfromtxt('con.csv', dtype=int)
     background_flow = np.genfromtxt('background_flow.csv')
-
-    mass = calculate_mass(radius, rho_p, rho_l)
 
     t = np.arange(0, end_time, dt)
     n_t = len(t)
@@ -178,13 +175,15 @@ def calculate(dt, end_time, n_frames, n_particles, rho_l, mu_l, mu_p, epsilon, g
     n_substeps = 10
     dt_substeps = dt / n_substeps
 
+    contact_time = np.zeros((n_particles, n_particles))
+    t_drainage = coalescence.drainage_time(radius, rho_l, sigma)
+    mass = calculate_mass(radius, rho_p, rho_l)
+
     position_file = open('position.csv', 'w')
     velocity_file = open('velocity.csv', 'w')
     results_file = open('results.csv', 'w')
     radius_file = open('radius.csv', 'w')
     for t_step in t:
-        # if np.any(np.abs(x) > .0025 - 100e-6):
-        #     print('wall2')
 
         if interpolation:
             flow_velocity = interpolate_flow_properties(x, coordinates, background_flow, connectivity)
@@ -198,27 +197,43 @@ def calculate(dt, end_time, n_frames, n_particles, rho_l, mu_l, mu_p, epsilon, g
             eo = eotvos_number(g, rho_p, rho_l, radius, sigma)
             particles_to_split = breakup.detect_breakup(we, eo)
 
-            n_new = np.sum(particles_to_split)
-            new_radius = np.zeros((n_new,))
-            new_radius_append = np.zeros((n_new,))
-            new_position_append = np.zeros((n_new,2))
-            new_velocity_append = u_n[particles_to_split]
-            for i, (old_radius, old_position) in enumerate(zip(radius[particles_to_split],
-                                                               x[particles_to_split])):
-                print('breakup')
-                new_radius1, new_radius2, new_position2 = breakup.new_bubble(old_radius, old_position)
-                new_radius[i] = new_radius1
-                new_radius_append[i] = new_radius2
-                new_position_append[i] = new_position2
+            if np.any(particles_to_split):
+                n_new = np.sum(particles_to_split)
+                new_radius = np.zeros((n_new,))
+                new_radius_append = np.zeros((n_new,))
+                new_position_append = np.zeros((n_new,2))
+                new_velocity_append = u_n[particles_to_split]
+                for i, (old_radius, old_position) in enumerate(zip(radius[particles_to_split],
+                                                                   x[particles_to_split])):
+                    print('breakup')
+                    new_radius1, new_radius2, new_position2 = breakup.new_bubble(old_radius, old_position)
+                    new_radius[i] = new_radius1
+                    new_radius_append[i] = new_radius2
+                    new_position_append[i] = new_position2
 
-            x_n = np.append(x_n, new_position_append, axis=0)
-            u_n = np.append(u_n, new_velocity_append, axis=0)
-            radius[particles_to_split] = new_radius
-            radius = np.append(radius, new_radius_append)
+                x_n = np.append(x_n, new_position_append, axis=0)
+                u_n = np.append(u_n, new_velocity_append, axis=0)
+                radius[particles_to_split] = new_radius
+                radius = np.append(radius, new_radius_append)
+                n_particles += n_new
+                mass = calculate_mass(radius, rho_p, rho_l)
 
+        # Evaluate coalescence
+        particle_collision, particle_collision_loc = detect_particle_contact(n_particles, x, radius)
+        contact_time = coalescence.update_contact_time(contact_time, particle_collision, dt)
+        particles_to_merge_matrix = coalescence.check_coalescence(contact_time, t_drainage)
+        if np.any(particles_to_merge_matrix):
+            radius, u, merged = coalescence.merge_particles(particles_to_merge_matrix, radius, u)
+            radius = np.delete(radius, merged)
+            x = np.delete(x, merged, axis=0)
+            x_n = np.delete(x_n, merged, axis=0)
+            u = np.delete(u, merged, axis=0)
+            u_n = np.delete(u_n, merged, axis=0)
+            mass = calculate_mass(radius, rho_p, rho_l)
+            n_particles -= len(merged)
 
         # x, u = integrate_euler(dt, x_n, u_n, flow_velocity, radius, rho_p, mass, epsilon, rho_l, mu_l, mu_p, g, sigma, wall_collision, particle_collision, overlap, particle_collision_loc)
-        x, u = integrate_rk4(dt, x_n, u_n, flow_velocity, radius, rho_p, mass, epsilon, rho_l, mu_l, mu_p, g, sigma, walls)
+        x, u = integrate_rk4(n_particles, dt, x_n, u_n, flow_velocity, radius, rho_p, mass, epsilon, rho_l, mu_l, mu_p, g, sigma, walls)
         x_n = x
         u_n = u
 
@@ -305,15 +320,15 @@ def detect_wall_contact(x, radius, walls):
     return wall_collision[wall_collision_loc], overlap[wall_collision_loc], wall_collision_loc
 
 
-def detect_particle_contact(position, radius):
-    particle_collision = np.full((len(position), len(position)), False)
+def detect_particle_contact(n_particles, position, radius):
+    particle_collision = np.full((n_particles, n_particles), False)
 
     for i, (x, r) in enumerate(zip(position, radius)):
         distance = np.sqrt(np.sum((x - position)**2, axis=1))
         particle_collision[i] = distance < r + radius
         particle_collision[i,i] = False
     particle_collision_loc = np.any(particle_collision, axis=1)
-    return particle_collision[particle_collision_loc], particle_collision_loc
+    return particle_collision, particle_collision_loc
 
 
 def in_cell(x, vertices):
@@ -368,9 +383,9 @@ def interpolate_flow_properties_fast(x, flow_type, parameters):
     return np.stack((u_l, v_l), axis=1)
 
 
-def apply_accelerations(position, velocity, flow_velocity, radius, rho_p, mass, epsilon, rho_l, mu_l, mu_p, g, sigma, walls, dt):
+def apply_accelerations(n_particles, position, velocity, flow_velocity, radius, rho_p, mass, epsilon, rho_l, mu_l, mu_p, g, sigma, walls, dt):
     wall_collision, wall_overlap, wall_collision_loc = detect_wall_contact(position, radius, walls)
-    particle_collision, particle_collision_loc = detect_particle_contact(position, radius)
+    particle_collision, particle_collision_loc = detect_particle_contact(n_particles, position, radius)
 
     a = np.zeros(velocity.shape)
     if drag:
@@ -378,7 +393,7 @@ def apply_accelerations(position, velocity, flow_velocity, radius, rho_p, mass, 
     if gravity:
         a += acceleration_gravity(rho_p, rho_l, g)
     if particle_collisions:
-        a[particle_collision_loc] += acceleration_particle_collision(particle_collision,
+        a[particle_collision_loc] += acceleration_particle_collision(particle_collision[particle_collision_loc],
                                                                      particle_collision_loc,
                                                                      position,
                                                                      velocity,
@@ -389,10 +404,6 @@ def apply_accelerations(position, velocity, flow_velocity, radius, rho_p, mass, 
                                                                      sigma,
                                                                      epsilon,
                                                                      dt)
-        # if collision_model == -1:
-        #         #     a[particle_collision_loc] += acceleration_particle_collision_rigid(particle_collision, particle_collision_loc, position, velocity, epsilon, mass, dt)
-        #         # elif collision_model == 1:
-        #         #     a[particle_collision_loc]+= acceleration_particle_collision_spring(particle_collision, particle_collision_loc, position, velocity, radius, mass)
     if wall_collisions:
         a[wall_collision_loc] += acceleration_wall_collision(wall_collision,
                                                              wall_collision_loc,
@@ -406,11 +417,6 @@ def apply_accelerations(position, velocity, flow_velocity, radius, rho_p, mass, 
                                                              sigma,
                                                              epsilon,
                                                              dt)
-        # if collision_model in [-1,2]:
-        #     wall_collision_rigid_loc = np.any(np.hsplit(wall_collision,2), axis=2).transpose()
-        #     a[wall_collision_rigid_loc] = acceleration_wall_collision_rigid(wall_collision_rigid_loc, velocity[wall_collision_loc], epsilon, dt)
-        # elif collision_model == 1:
-        #     a[wall_collision_loc] = acceleration_wall_collision_spring(wall_collision, wall_collision_loc, wall_overlap, velocity, mass)
     return a
 
 
@@ -421,37 +427,28 @@ def integrate_euler(dt, x_n, u_n, flow_velocity, radius, rho_p, mass, epsilon, r
     return x, u
 
 
-def integrate_rk4(dt, x_n, u_n, flow_velocity, radius, rho_p, mass, epsilon, rho_l, mu_l, mu_p, g, sigma, walls):
+def integrate_rk4(n_particles, dt, x_n, u_n, flow_velocity, radius, rho_p, mass, epsilon, rho_l, mu_l, mu_p, g, sigma, walls):
     u = np.zeros_like(u_n)
     x = np.zeros_like(x_n)
 
-    # collision_loc = np.logical_or(wall_collision_loc, particle_collision_loc)
-
-    k1u = apply_accelerations(x_n, u_n,
+    k1u = apply_accelerations(n_particles, x_n, u_n,
                               flow_velocity, radius, rho_p, mass, epsilon, rho_l, mu_l, mu_p, g, sigma, walls, dt) * dt
     k1x = u_n * dt
 
-    k2u = apply_accelerations(x_n + k1x / 2, u_n + k1u / 2,
+    k2u = apply_accelerations(n_particles, x_n + k1x / 2, u_n + k1u / 2,
                               flow_velocity, radius, rho_p, mass, epsilon, rho_l, mu_l, mu_p, g, sigma, walls, dt) * dt
     k2x = (u_n + k1u / 2) * dt
 
-    k3u = apply_accelerations(x_n + k2x / 2, u_n + k2u / 2,
+    k3u = apply_accelerations(n_particles, x_n + k2x / 2, u_n + k2u / 2,
                               flow_velocity, radius, rho_p, mass, epsilon, rho_l, mu_l, mu_p, g, sigma, walls, dt) * dt
     k3x = (u_n + k2u / 2) * dt
 
-    k4u = apply_accelerations(x_n + k3x, u_n + k3u,
+    k4u = apply_accelerations(n_particles, x_n + k3x, u_n + k3u,
                               flow_velocity, radius, rho_p, mass, epsilon, rho_l, mu_l, mu_p, g, sigma, walls, dt) * dt
     k4x = (u_n + k3u) * dt
 
-    # u[collision_loc] = u_n[collision_loc] + k1u[collision_loc]
-    # x[collision_loc] = 0.5 * k1u[collision_loc] * dt + u[collision_loc] * dt + x_n[collision_loc]
-
     u = u_n + (k1u + 2 * (k2u + k3u) + k4u) / 6
     x = x_n + (k1x + 2 * (k2x + k3x) + k4x) / 6
-
-    # if np.any(collision_loc):
-    #     print('collision?')
-    #     print(u[collision_loc], x[collision_loc])
     return x, u
 
 
@@ -472,7 +469,7 @@ def particle_properties(n_particles, diameter, diameter_stddev, diameter_min, rh
     rp = rng.normal(diameter / 2, diameter_stddev / 2, (n_particles,))
     rp[rp < diameter_min / 2] = diameter_min / 2
 
-    rho_p = np.full((n_particles,), rho_p)
+    # rho_p = np.full((n_particles,), rho_p)
 
     return rp, rho_p
 

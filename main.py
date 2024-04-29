@@ -131,13 +131,33 @@ def main():
     # Grid
     coordinates, connectivity, background_flow = calculate_background_flow(xmin, xmax, ymin, ymax, nx, ny, flow_type, parameters)
 
-    np.savetxt('radius.csv', radius)
-    np.savetxt('rho_p.csv', rho_p)
-    np.savetxt('x.csv', x)
-    np.savetxt('u.csv', u)
-    np.savetxt('coor.csv', coordinates)
-    np.savetxt('con.csv', connectivity)
-    np.savetxt('background_flow.csv', background_flow)
+    np.savetxt('radius.csv', radius, delimiter=',')
+    np.savetxt('rho_p.csv', rho_p, delimiter=',')
+    np.savetxt('x.csv', x, delimiter=',')
+    np.savetxt('u.csv', u, delimiter=',')
+    np.savetxt('coor.csv', coordinates, delimiter=',')
+    np.savetxt('con.csv', connectivity, delimiter=',')
+    np.savetxt('background_flow.csv', background_flow, delimiter=',')
+
+    with open('options.txt', 'w') as f:
+        f.write(f'''{dt}
+{end_time}
+{n_frames}
+{g[0]}
+{g[1]}
+{mu_l}
+{rho_l}
+{sigma}
+{mu_p}
+{xmin}
+{xmax}
+{ymin}
+{ymax}
+{int(drag)}
+{int(gravity)}
+{int(particle_collisions)}
+{flow_type}
+{','.join(str(p) for p in parameters)}''')
 
     calculate(dt, end_time, n_frames, n_particles, rho_l, mu_l, mu_p, epsilon, g, sigma, walls, flow_type, parameters)
 

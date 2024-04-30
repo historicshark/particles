@@ -18,7 +18,7 @@ collision_model = 2    # Options: 0: off, 1: spring, 2: simple (-1: rigid)
 particle_collisions = True
 gravity = False
 wall_collisions = True
-particle_breakup = True
+particle_breakup = False
 interpolation = False
 
 save_animation = False
@@ -72,7 +72,7 @@ np.seterr(divide='ignore')
 
 def main():
     dt = 1e-5
-    end_time = 1
+    end_time = .5
     n_frames = 200
 
     g = np.array([0, -9.81])
@@ -81,13 +81,13 @@ def main():
     sigma = .072
 
     # Particles
-    n_particles = 100
+    n_particles = 50
 
     rho_p = 1.2
     mu_p = 1e-5
 
     diameter = 200e-6
-    diameter_stddev = 25e-6
+    diameter_stddev = 0
     diameter_min = 50e-6
 
     velocity = 0
@@ -105,14 +105,14 @@ def main():
     ymax = .0025
     walls = np.array([xmin, xmax, ymin, ymax])
 
-    # flow_type = 'uniform'
-    # parameters = [.02]
+    flow_type = 'uniform'
+    parameters = [.02]
 
-    flow_type = 'vortex'
-    parameters = [.001, .005]
+#    flow_type = 'vortex'
+#    parameters = [.001, .005]
 
-    # flow_type = 'test'
-    # parameters = [.05]
+#    flow_type = 'test'
+#    parameters = [.05]
 
     # Initialization
     radius, rho_p = particle_properties(n_particles, diameter, diameter_stddev, diameter_min, rho_p)
@@ -131,8 +131,8 @@ def main():
     # Grid
     coordinates, connectivity, background_flow = calculate_background_flow(xmin, xmax, ymin, ymax, nx, ny, flow_type, parameters)
 
-    np.savetxt('radius.csv', radius, delimiter=',')
-    np.savetxt('rho_p.csv', rho_p, delimiter=',')
+    np.savetxt('r.csv', radius, delimiter=',')
+#    np.savetxt('rho_p.csv', rho_p, delimiter=',')
     np.savetxt('x.csv', x, delimiter=',')
     np.savetxt('u.csv', u, delimiter=',')
     np.savetxt('coor.csv', coordinates, delimiter=',')
@@ -149,24 +149,26 @@ def main():
 {rho_l}
 {sigma}
 {mu_p}
+{rho_p}
 {xmin}
 {xmax}
 {ymin}
 {ymax}
 {int(drag)}
 {int(gravity)}
+{int(wall_collisions)}
 {int(particle_collisions)}
 {flow_type}
 {','.join(str(p) for p in parameters)}''')
 
-    calculate(dt, end_time, n_frames, n_particles, rho_l, mu_l, mu_p, epsilon, g, sigma, walls, flow_type, parameters)
+#    calculate(dt, end_time, n_frames, n_particles, rho_l, mu_l, mu_p, epsilon, g, sigma, walls, flow_type, parameters)
 
-    if gravity:
-        tracked_var = 'me'
-    else:
-        tracked_var = 'ke'
-
-    animate(tracked_var, xmin, xmax, ymin, ymax)
+#    if gravity:
+#        tracked_var = 'me'
+#    else:
+#        tracked_var = 'ke'
+#
+#    animate(tracked_var, xmin, xmax, ymin, ymax)
 
     return
 
@@ -492,7 +494,7 @@ def particle_properties(n_particles, diameter, diameter_stddev, diameter_min, rh
     rp = rng.normal(diameter / 2, diameter_stddev / 2, (n_particles,))
     rp[rp < diameter_min / 2] = diameter_min / 2
 
-    rho_p = np.full((n_particles,), rho_p)
+#    rho_p = np.full((n_particles,), rho_p)
 
     return rp, rho_p
 

@@ -46,28 +46,29 @@ Vector acceleration_particle_collision_simple(Vector position, Vector other_posi
     }
     Vector distance_vector = other_position - position;
     Vector n = distance_vector / distance_vector.norm();
-    Vector f_e = force_elastic_simple(radius, deformation, sigma);
-    Vector f_v = force_viscous_simple(deformation, h0, radius, velocity, mu_l, mu_p, n, true);
+    Vector f_e = force_elastic_simple(radius, deformation, sigma, n);
+    Vector f_v = force_viscous_simple(deformation, h0, radius, velocity, mu_l, n, true);
     Vector a = (f_e + f_v) / mass;
     return a;
 }
 
-Vector acceleration_wall_collision_simple(std::array<bool, 4> wall_collision, std::array<double, 4> wall_overlap, Vector position, Vector velocity, double radius, double mass, double mu_p, double mu_l, double sigma)
+Vector acceleration_wall_collision_simple(WallContact wall_collision, Walls wall_overlap, Vector position, Vector velocity, double radius, double mass, double mu_p, double mu_l, double sigma)
 {
     Vector a;
     double h0 = fluid_film_thickness(mu_l, mu_p, radius, sigma, false);
-    for (int i = 0; i != 4; i++)
+
+    for (auto [wc, wo, n] : ranges::views::zip(wall_collision, wall_overlap, wall_normals))
     {
-        if (wall_collision[i])
+        if (wc)
         {
-            double deformation = wall_overlap[i] + h0;
-            Vector f_e = force_elastic_simple(radius, deformation, sigma);
+            double deformation = wo + h0;
+            Vector f_e = force_elastic_simple(radius, deformation, sigma, n);
             Vector f_v;
-            if (wall_overlap[i] > h0)
+            if (wo > h0)
             {
-                f_v = force_viscous_simple(deformation, h0, radius, velocity, mu_l, wall_normals[i], false);
+                f_v = force_viscous_simple(deformation, h0, radius, velocity, mu_l, n, false);
             }
-            a += (f_e + f_v) / m;
+            a += (f_e + f_v) / mass;
         }
     }
     return a;

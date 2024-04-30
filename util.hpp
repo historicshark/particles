@@ -7,6 +7,8 @@
 #include "Vector2D.hpp"
 
 const std::array<Vector, 4> wall_normals = {{{-1,0},{1,0},{0,-1},{0,1}}};
+using WallContact = std::array<bool, 4>;
+using Walls = std::array<double, 4>;
 
 template<typename T>
 std::vector<double> linspace(T start_in, T end_in, int num_in)

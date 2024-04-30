@@ -1,3 +1,5 @@
+#include "properties.hpp"
+
 double calculate_area_xs(double radius)
 {
     return std::numbers::pi * std::pow(radius, 2);

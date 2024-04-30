@@ -40,6 +40,8 @@ class Vector
     Vector operator/(Vector other) { return {vector[0] / other.vector[0], vector[1] / other.vector[1]}; };
     Vector operator*(Vector other) { return {vector[0] * other.vector[0], vector[1] * other.vector[1]}; };
     
+    Vector operator-() {return {-vector[0], -vector[1]}; };
+    
     Vector operator+=(Vector other) { return {vector[0] += other.vector[0], vector[1] += other.vector[1]}; };
     
     friend Vector operator+(double c, Vector v) { return {v.vector[0] + c, v.vector[1] + c}; };
@@ -61,7 +63,7 @@ class Vector
     
     double dot(Vector& other) { return vector[0] * other.vector[0] + vector[1] * other.vector[1]; };
     
-    auto string()
+    auto string() const
     { 
         std::ostringstream os;
         os << vector[0] << "," << vector[1];

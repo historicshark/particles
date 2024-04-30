@@ -17,6 +17,7 @@
 #include "tomiyama.hpp"
 #include "flow_properties.hpp"
 #include "simple.hpp"
+#include "coalescence_breakup.hpp"
 
 
 void update_particle_contact(const std::vector<Vector>& position, const std::vector<double>& radius, std::vector<std::array<size_t, 2>>& contact_list, std::vector<double>& contact_time_list, double dt)
@@ -127,14 +128,52 @@ void calculate(double dt,
     std::vector<double> contact_time_list;
     
     std::vector<Vector> flow_velocity(u.size());
-    std::transform(x.cbegin(), x.cend(), flow_velocity.begin(), [flow_type, parameters](const Vector& v){return interpolate_flow_properties_fast(v, flow_type, parameters);});
+    std::transform(x.cbegin(), x.cend(), flow_velocity.begin(), [flow_type, parameters](const Vector& v){
+        return interpolate_flow_properties_fast(v, flow_type, parameters);
+    });
     
     std::vector<double> mass(u.size());
-    std::transform(radius.cbegin(), radius.cend(), mass.begin(), [rho_p, rho_l](const double& r){return calculate_mass(r, rho_p, rho_l);});
+    std::transform(radius.cbegin(), radius.cend(), mass.begin(), [rho_p, rho_l](const double& r){
+        return calculate_mass(r, rho_p, rho_l);
+    });
     
     for (double t = 0; t < end_time; t += dt)
     {
-        std::transform(x.begin(), x.end(), flow_velocity.begin(), [flow_type, parameters](Vector& v){return interpolate_flow_properties_fast(v, flow_type, parameters);});
+        std::transform(x.begin(), x.end(), flow_velocity.begin(), [flow_type, parameters](Vector& v){
+            return interpolate_flow_properties_fast(v, flow_type, parameters);
+        });
+        
+        // Evaluate breakup
+        std::vector<double> weber(x.size());
+        std::vector<double> eotvos(x.size());
+        std::vector<double> new_radius;
+        std::vector<Vector> new_position;
+        std::vector<Vector> new_velocity;
+        for (auto [we, eo, pos, vel, r, u_l] : ranges::views::zip(weber, eotvos, x, u, radius, flow_velocity))
+        {
+            we = weber_number(rho_l, vel - u_l, r, sigma);
+            eo = eotvos_number(g, rho_p, rho_l, r, sigma);
+            if (detect_breakup(we, eo))
+            {
+                auto [new_r1, new_r2, new_pos] = breakup_radii_and_new_position(r, pos);
+                r = new_r1;
+                new_radius.push_back(new_r2);
+                new_position.push_back(new_pos);
+                new_velocity.push_back(vel);
+            }
+        }
+        if (!new_radius.empty())
+        {
+            for (const auto [new_r, new_pos, new_vel] : ranges::views::zip(new_radius, new_position, new_velocity))
+            {
+                radius.push_back(new_r);
+                x_n.push_back(new_pos);
+                x.push_back(new_pos);
+                u_n.push_back(new_vel);
+                u.push_back(new_vel);
+            }
+        }
+        
         
         update_particle_contact(x, radius, contact_list, contact_time_list, dt);
         
@@ -190,22 +229,10 @@ void calculate(double dt,
         x_n = x;
         u_n = u;
     }
-    std::cout << "end" << std::endl;
-//    std::ranges::views::z
-//    for (auto [pos, vel] : ranges::views::zip(x, u))
-//    {
-//        std::cout << pos.string() << "\t" << vel.string() << std::endl;
-//        pos = {0,0};
-//    }
-//    for (auto [pos, vel] : ranges::views::zip(x, u))
-//    {
-//        std::cout << pos.string() << "\t" << vel.string() << std::endl;
-//    }
 }
 
 int main(int argc, char* argv[])
 {
-    std::cout << "main" << std::endl;
     double dt, end_time, gx, gy, mu_l, rho_l, sigma, rho_p, mu_p, xmin, xmax, ymin, ymax;
     int n_frames;
     bool drag, gravity, wall_collisions, particle_collisions;

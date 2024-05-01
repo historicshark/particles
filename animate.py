@@ -5,9 +5,27 @@ import pandas as pd
 import argparse
 
 def main():
-    tracked_var = 'ke'
-    save_animation = False
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-save', action='store_true', help='Save animation to file')
+    parser.add_argument('-var', help='Variable to plot: ke, pe, me')
+    args = parser.parse_args()
     
+    save_animation = args.save
+    if args.var:
+        match args.var.lower():
+            case 'ke':
+                tracked_var = 'ke'
+            case 'pe':
+                tracked_var = 'pe'
+            case _:
+                tracked_var = ''
+    else:
+        tracked_var = ''
+    animate(tracked_var, save_animation)
+    return
+
+
+def animate(tracked_var, save_animation):
     with open('options.txt') as f:
         for i in range(10):
             f.readline()
@@ -49,8 +67,9 @@ def main():
         tracked_var_i = 1
     elif tracked_var == 'me':
         tracked_var_i = 2
-
-    bar, = ax_bar.barh(tracked_var.upper(), results[0, tracked_var_i])
+    
+    if tracked_var:
+        bar, = ax_bar.barh(tracked_var.upper(), results[0, tracked_var_i])
     # ax_bar.set_xlim(results[:, tracked_var_i].min(), results[:, tracked_var_i].max())
 
     def update(frame):
@@ -58,22 +77,25 @@ def main():
             x_particle, y_particle = particle_xy_plot(i_particle, r, frame)
             particle.set_xdata(x_particle)
             particle.set_ydata(y_particle)
-        bar.set_width(results[frame, tracked_var_i])
+        if tracked_var:
+            bar.set_width(results[frame, tracked_var_i])
         return particles
 
     n_time = len(time)
     ani = animation.FuncAnimation(fig=fig, func=update, frames=n_time-1, interval=1)
 
-    fig, ax = plt.subplots()
-    ax.plot(time, results[:, tracked_var_i])
-    ax.set_xlabel('t')
-    ax.set_ylabel(tracked_var.upper())
-    ax.grid()
+    if tracked_var:
+        fig, ax = plt.subplots()
+        ax.plot(time, results[:, tracked_var_i])
+        ax.set_xlabel('t')
+        ax.set_ylabel(tracked_var.upper())
+        ax.grid()
 
     if save_animation:
         print('Saving animation...')
         ani.save(filename='animation.gif', writer="pillow")
-        fig.savefig('tracked_var.png', dpi=400)
+        if tracked_var:
+            fig.savefig('tracked_var.png', dpi=400)
         print(f"Animation saved")
     else:
         plt.show()

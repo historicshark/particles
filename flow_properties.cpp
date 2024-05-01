@@ -35,6 +35,10 @@ Vector interpolate_flow_properties_fast(Vector x, std::string flow_type, std::ve
             flow_velocity = {-parameters[0], 0};
         }
     }
+    else if (flow_type == "couette")
+    {
+        flow_velocity = {parameters[0] * (x[1] - parameters[3]) / (parameters[4] - parameters[3]) + 1. / (2. * parameters[2]) * parameters[1] * (std::pow(x[1] - parameters[3], 2) - (parameters[4] - parameters[3]) * (x[1] - parameters[3])), 0};
+    }
     return flow_velocity;
 }
 

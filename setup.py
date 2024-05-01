@@ -1,16 +1,17 @@
 import numpy as np
+import matplotlib.pyplot as plt
 import argparse
 
 def main():
     drag = True
-    particle_collisions = True
+    particle_collisions = False
     gravity = False
     wall_collisions = True
     lift = True
 #    particle_breakup_coalescence = False
     
     dt = 1e-5
-    end_time = 2
+    end_time = 1
     n_frames = 800
 
     g = np.array([0, -9.81])
@@ -19,7 +20,7 @@ def main():
     sigma = .072
 
     # Particles
-    n_particles = 20
+    n_particles = 10
 
     rho_p = 1.2
     mu_p = 1e-5
@@ -37,8 +38,8 @@ def main():
     nx = 20
     ny = 20
 
-    xmin = -.0025
-    xmax = .0025
+    xmin = 0
+    xmax = .01
     ymin = -.0025
     ymax = .0025
     walls = np.array([xmin, xmax, ymin, ymax])
@@ -46,11 +47,17 @@ def main():
 #    flow_type = 'uniform'
 #    parameters = [.02]
 
-    flow_type = 'vortex'
-    parameters = [.001, .005]
+#    flow_type = 'vortex'
+#    parameters = [.001, .005]
+    # parameters = [core-radius, max-tangential-velocity]
 
 #    flow_type = 'test'
 #    parameters = [.05]
+        
+    flow_type = 'couette'
+    parameters = [0.01, 0, mu_l, ymin, ymax]
+    # u = U y/b + 1/(2 mu) (dpdx) (y^2 - by)
+    # parameters = [U, dpdx, mu, ymin, ymax]
 
     # Initialization
     radius, rho_p = particle_properties(n_particles, diameter, diameter_stddev, diameter_min, rho_p)
@@ -86,7 +93,7 @@ def main():
 {int(lift)}
 {flow_type}
 {','.join(str(p) for p in parameters)}''')
-    
+    plt.show()
     return
 
 
@@ -106,24 +113,23 @@ def initial_conditions(n_particles, xmin, xmax, ymin, ymax, velocity, velocity_s
     # x0 = np.array((-20,20))
     # y0 = np.zeros((n_particles,))
 
-    x0 = np.stack((x0,y0), axis=1)
-
-    u0 = interpolate_flow_properties_fast(x0, flow_type, parameters)
-
     if flow_type == 'test':
         midx = (xmax - xmin) / 2
         midy = (ymax + ymin) / 2
         x0 = np.array((xmin/2,xmax/2))
         y0 = np.full_like(x0, midy)
-        x0 = np.stack((x0, y0), axis=1)
         u0 = np.array(((parameters[0],0),(-parameters[0],0)))
+    elif flow_type == 'couette':
+        x0 = (xmax/3 - xmin) * ((2 * middle - 1) * rng.random((n_particles,)) + 1 - middle) + xmin
 
     # u0 = rng.normal(velocity, velocity_stddev, (n_particles,2))
     # v0 = rng.normal(velocity, velocity_stddev, (n_particles,))
 
     # u0 = np.zeros((n_particles,))
     # v0 = np.zeros((n_particles,))
+    x0 = np.stack((x0,y0), axis=1)
 
+    u0 = interpolate_flow_properties_fast(x0, flow_type, parameters)
     return x0, u0
 
 
@@ -148,6 +154,11 @@ def calculate_background_flow(xmin, xmax, ymin, ymax, nx, ny, flow_type, paramet
             con[ielem] = [idx1, idx2, idx3, idx4]
 
     u_l = interpolate_flow_properties_fast(np.stack((x,y), axis=1), flow_type, parameters)
+    
+    fig, ax = plt.subplots()
+    ax.contourf(x_, y_, np.reshape(np.sqrt(np.sum(u_l * u_l, axis=1)), (len(y_), len(x_))))
+    ax.set_xlabel('X [m]')
+    ax.set_ylabel('Y [m]')
 
     return coor, con, u_l
 
@@ -169,6 +180,10 @@ def interpolate_flow_properties_fast(x, flow_type, parameters):
         v_l = u_theta * np.cos(theta)
     elif flow_type == 'test':
         u_l = np.array([parameters[0], -parameters[0]])
+        v_l = np.zeros_like(u_l)
+    elif flow_type == 'couette':
+        # parameters = [U, dpdx, mu, ymin, ymax]
+        u_l = parameters[0] * (x[:,1] - parameters[3]) / (parameters[4] - parameters[3]) + 1. / (2. * parameters[2]) * parameters[1] * ((x[:,1] - parameters[3])**2 - (parameters[4] - parameters[3]) * (x[:,1] - parameters[3]))
         v_l = np.zeros_like(u_l)
     else:
         u_l = np.zeros(x[:,0].shape)

@@ -30,10 +30,8 @@ double drag_coefficient_tomiyama_high(double re, double eo)
     return cd;
 }
 
-double lift_coefficient_tomiyama(double re, double eo, double radius)
+double lift_coefficient_tomiyama(double re, double eo_d, double radius)
 {
-    double d_h = 2. * radius * (1. + .1163 * std::pow(eo, .757));
-    double eo_d = eo * d_h * d_h / std::pow(2. * radius, 2);
     double f = 0.00105 * std::pow(eo_d,3) - .0159 * std::pow(eo_d,2) - .0204 * eo_d + .474;
     double cl;
     if (eo_d > 4)

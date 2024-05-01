@@ -63,12 +63,17 @@ Vector acceleration_gravity(double rho_p, double rho_l, Vector g)
     return (rho_p - rho_l) / rho_p * g;
 }
 
-Vector acceleration_lift(double radius, double rho_l, Vector position, Vector velocity, Vector flow_velocity, std::string flow_type, std::vector<double> parameters)
+Vector acceleration_lift(double radius, double rho_l, Vector position, Vector velocity, Vector flow_velocity, double rho_p, double sigma, Vector g, double mu_l, std::string flow_type, std::vector<double> parameters)
 {
     Vector u_rel = flow_velocity - velocity;
     double curl = curl_of_velocity(position, flow_type, parameters);
-    Vector vec = {-u_rel[1] * curl, u_rel[0] * curl};
-    return calculate_volume(radius) * rho_l * vec / 4.;
+    Vector u_rel_cross_curl_u_l = {u_rel[1] * curl, -u_rel[0] * curl};
+    double re = reynolds_number(flow_velocity - velocity, radius, rho_l, mu_l);
+    double eo = eotvos_number(g, rho_p, rho_l, radius, sigma);
+    double d_h = 2. * radius * (1. + .1163 * std::pow(eo, .757));
+    double eo_d = eo * d_h * d_h / std::pow(2. * radius, 2);
+    double cl = lift_coefficient_tomiyama(re, eo_d, radius);
+    return rho_l / rho_p * cl * u_rel_cross_curl_u_l;
 }
 
 
@@ -117,7 +122,7 @@ std::vector<Vector> apply_accelerations(std::vector<Vector>& position,
         }
         if (lift)
         {
-            a += acceleration_lift(r, rho_l, x, u, u_l, flow_type, parameters);
+            a += acceleration_lift(r, rho_l, x, u, u_l, rho_p, sigma, g, mu_l, flow_type, parameters);
         }
     }
     if (particle_collisions)

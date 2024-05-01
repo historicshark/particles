@@ -63,13 +63,13 @@ Vector acceleration_gravity(double rho_p, double rho_l, Vector g)
     return (rho_p - rho_l) / rho_p * g;
 }
 
-//Vector acceleration_lift(double radius, double rho_l, Vector position, Vector velocity, Vector flow_velocity, std::string flow_type, std::vector<double> parameters)
-//{
-//    Vector u_rel = flow_velocity - velocity;
-//    double curl = curl_of_velocity(position, flow_type, parameters);
-//    Vector vec = {-u_rel[1] * curl, u_rel[0] * curl};
-//    return calculate_volume(radius) * rho_l * vec / 4.;
-//}
+Vector acceleration_lift(double radius, double rho_l, Vector position, Vector velocity, Vector flow_velocity, std::string flow_type, std::vector<double> parameters)
+{
+    Vector u_rel = flow_velocity - velocity;
+    double curl = curl_of_velocity(position, flow_type, parameters);
+    Vector vec = {-u_rel[1] * curl, u_rel[0] * curl};
+    return calculate_volume(radius) * rho_l * vec / 4.;
+}
 
 
 std::vector<Vector> apply_accelerations(std::vector<Vector>& position,
@@ -89,7 +89,8 @@ std::vector<Vector> apply_accelerations(std::vector<Vector>& position,
                                         bool drag,
                                         bool gravity,
                                         bool particle_collisions,
-                                        bool wall_collisions)
+                                        bool wall_collisions,
+                                        bool lift)
 {
     std::vector<Vector> acceleration(position.size());
     
@@ -113,6 +114,10 @@ std::vector<Vector> apply_accelerations(std::vector<Vector>& position,
             Walls overlap = wall_overlap(x, r, walls);
             WallContact wall_collision = detect_wall_contact(overlap);
             a += acceleration_wall_collision_simple(wall_collision, overlap, x, u, r, m, mu_p, mu_l, sigma);
+        }
+        if (lift)
+        {
+            a += acceleration_lift(r, rho_l, x, u, u_l, flow_type, parameters);
         }
     }
     if (particle_collisions)
@@ -155,31 +160,32 @@ void integrate_rk4(std::vector<Vector>& x_n,
                    bool drag,
                    bool gravity,
                    bool particle_collisions,
-                   bool wall_collisions)
+                   bool wall_collisions,
+                   bool lift)
 {
     auto k1u = apply_accelerations(x_n, u_n,
-                                   radius, mass, rho_p, rho_l, mu_l, mu_p, g, sigma, walls, dt, flow_type, parameters, drag, gravity, particle_collisions, wall_collisions);
+                                   radius, mass, rho_p, rho_l, mu_l, mu_p, g, sigma, walls, dt, flow_type, parameters, drag, gravity, particle_collisions, wall_collisions, lift);
     
     std::vector<Vector> x_n2;
     std::vector<Vector> u_n2;
     std::transform(x_n.begin(), x_n.end(), u_n.begin(), std::back_inserter(x_n2), [dt](Vector& v, Vector& k){return v + dt * k / 2;});
     std::transform(u_n.begin(), u_n.end(), k1u.begin(), std::back_inserter(u_n2), [dt](Vector& v, Vector& k){return v + dt * k / 2;});
     auto k2u = apply_accelerations(x_n2, u_n2,
-                                   radius, mass, rho_p, rho_l, mu_l, mu_p, g, sigma, walls, dt, flow_type, parameters,  drag, gravity, particle_collisions, wall_collisions);
+                                   radius, mass, rho_p, rho_l, mu_l, mu_p, g, sigma, walls, dt, flow_type, parameters,  drag, gravity, particle_collisions, wall_collisions, lift);
     
     std::vector<Vector> x_n3;
     std::vector<Vector> u_n3;
     std::transform(x_n.begin(), x_n.end(), u_n2.begin(), std::back_inserter(x_n3), [dt](Vector& v, Vector& k){return v + dt * k / 2;});
     std::transform(u_n.begin(), u_n.end(), k2u.begin(), std::back_inserter(u_n3), [dt](Vector& v, Vector& k){return v + dt * k / 2;});
     auto k3u = apply_accelerations(x_n3, u_n3,
-                                   radius, mass, rho_p, rho_l, mu_l, mu_p, g, sigma, walls, dt, flow_type, parameters,  drag, gravity, particle_collisions, wall_collisions);
+                                   radius, mass, rho_p, rho_l, mu_l, mu_p, g, sigma, walls, dt, flow_type, parameters,  drag, gravity, particle_collisions, wall_collisions, lift);
     
     std::vector<Vector> x_n4;
     std::vector<Vector> u_n4;
     std::transform(x_n.begin(), x_n.end(), u_n3.begin(), std::back_inserter(x_n4), [dt](Vector& v, Vector& k){return v + dt * k;});
     std::transform(u_n.begin(), u_n.end(), k3u.begin(), std::back_inserter(u_n4), [dt](Vector& v, Vector& k){return v + dt * k;});
     auto k4u = apply_accelerations(x_n4, u_n4,
-                                   radius, mass, rho_p, rho_l, mu_l, mu_p, g, sigma, walls, dt, flow_type, parameters,  drag, gravity, particle_collisions, wall_collisions);
+                                   radius, mass, rho_p, rho_l, mu_l, mu_p, g, sigma, walls, dt, flow_type, parameters,  drag, gravity, particle_collisions, wall_collisions, lift);
     
     for (size_t i = 0; i != u.size(); i++)
     {
@@ -210,10 +216,11 @@ void integrate_euler(std::vector<Vector>& x_n,
                      bool drag,
                      bool gravity,
                      bool particle_collisions,
-                     bool wall_collisions)
+                     bool wall_collisions,
+                     bool lift)
 {
     auto k1u = apply_accelerations(x_n, u_n,
-                                   radius, mass, rho_p, rho_l, mu_l, mu_p, g, sigma, walls, dt, flow_type, parameters,  drag, gravity, particle_collisions, wall_collisions);
+                                   radius, mass, rho_p, rho_l, mu_l, mu_p, g, sigma, walls, dt, flow_type, parameters,  drag, gravity, particle_collisions, wall_collisions, lift);
     
     for (auto [x_n_, u_n_, x_, u_, k1u_] : ranges::views::zip(x_n, u_n, x, u, k1u))
     {

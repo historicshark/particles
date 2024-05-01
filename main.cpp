@@ -74,7 +74,8 @@ void calculate(double dt,
                bool drag,
                bool gravity,
                bool wall_collisions,
-               bool particle_collisions)
+               bool particle_collisions,
+               bool lift)
 {
     std::cout << "-------------------------\n";
     std::vector<double> radius;
@@ -243,7 +244,8 @@ void calculate(double dt,
                       drag,
                       gravity,
                       particle_collisions,
-                      wall_collisions);
+                      wall_collisions,
+                      lift);
 
         if (t > *t_save_it)
         {
@@ -311,7 +313,7 @@ int main(int argc, char* argv[])
 {
     double dt, end_time, gx, gy, mu_l, rho_l, sigma, rho_p, mu_p, xmin, xmax, ymin, ymax;
     int n_frames;
-    bool drag, gravity, wall_collisions, particle_collisions;
+    bool drag, gravity, wall_collisions, particle_collisions, lift;
     std::string flow_type;
     std::vector<double> parameters;
     
@@ -354,6 +356,8 @@ int main(int argc, char* argv[])
     wall_collisions = line != "0";
     std::getline(options_file, line);
     particle_collisions = line != "0";
+    std::getline(options_file, line);
+    lift = line != "0";
     
     std::getline(options_file, flow_type);
     
@@ -383,5 +387,6 @@ int main(int argc, char* argv[])
               drag,
               gravity,
               wall_collisions,
-              particle_collisions);
+              particle_collisions,
+              lift);
 }

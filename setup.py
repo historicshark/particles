@@ -6,6 +6,7 @@ def main():
     particle_collisions = True
     gravity = False
     wall_collisions = True
+    lift = True
 #    particle_breakup_coalescence = False
     
     dt = 1e-5
@@ -18,7 +19,7 @@ def main():
     sigma = .072
 
     # Particles
-    n_particles = 100
+    n_particles = 20
 
     rho_p = 1.2
     mu_p = 1e-5
@@ -82,6 +83,7 @@ def main():
 {int(gravity)}
 {int(wall_collisions)}
 {int(particle_collisions)}
+{int(lift)}
 {flow_type}
 {','.join(str(p) for p in parameters)}''')
     

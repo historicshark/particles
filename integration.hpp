@@ -30,7 +30,7 @@ Vector acceleration_drag(Vector particle_velocity,
 
 Vector acceleration_gravity(double rho_p, double rho_l, Vector g);
 
-//Vector acceleration_lift();
+Vector acceleration_lift(double radius, double rho_l, Vector position, Vector velocity, Vector flow_velocity, std::string flow_type, std::vector<double> parameters);
 
 std::vector<Vector> apply_accelerations(std::vector<Vector>& position,
                                         std::vector<Vector>& velocity,
@@ -49,7 +49,8 @@ std::vector<Vector> apply_accelerations(std::vector<Vector>& position,
                                         bool drag,
                                         bool gravity,
                                         bool particle_collisions,
-                                        bool wall_collisions);
+                                        bool wall_collisions,
+                                        bool lift);
 
 std::vector<Vector> apply_velocities(std::vector<Vector>& velocity, double dt);
 
@@ -72,7 +73,8 @@ void integrate_rk4(std::vector<Vector>& x_n,
                    bool drag,
                    bool gravity,
                    bool particle_collisions,
-                   bool wall_collisions);
+                   bool wall_collisions,
+                   bool lift);
 
 void integrate_euler(std::vector<Vector>& x_n,
                      std::vector<Vector>& u_n,
@@ -93,4 +95,5 @@ void integrate_euler(std::vector<Vector>& x_n,
                      bool drag,
                      bool gravity,
                      bool particle_collisions,
-                     bool wall_collisions);
+                     bool wall_collisions,
+                     bool lift);

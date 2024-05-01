@@ -9,8 +9,8 @@ def main():
 #    particle_breakup_coalescence = False
     
     dt = 1e-5
-    end_time = .5
-    n_frames = 200
+    end_time = 2
+    n_frames = 800
 
     g = np.array([0, -9.81])
     mu_l = 1e-3
@@ -18,13 +18,13 @@ def main():
     sigma = .072
 
     # Particles
-    n_particles = 50
+    n_particles = 100
 
     rho_p = 1.2
     mu_p = 1e-5
 
     diameter = 200e-6
-    diameter_stddev = 0
+    diameter_stddev = 25e-6
     diameter_min = 50e-6
 
     velocity = 0

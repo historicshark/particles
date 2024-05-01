@@ -62,7 +62,7 @@ def main():
         return particles
 
     n_time = len(time)
-    ani = animation.FuncAnimation(fig=fig, func=update, frames=n_time, interval=1)
+    ani = animation.FuncAnimation(fig=fig, func=update, frames=n_time-1, interval=1)
 
     fig, ax = plt.subplots()
     ax.plot(time, results[:, tracked_var_i])

@@ -304,7 +304,7 @@ void calculate(double dt,
     
     results_file << ke << "," << pe << "\n";
     
-    std::cout << "#\n-------------------------\n";
+    std::cout << "#\n-------------------------\n\n";
 }
 
 int main(int argc, char* argv[])

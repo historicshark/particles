@@ -1,5 +1,6 @@
 #pragma once
 
+#include <string>
 #include <range/v3/view/zip.hpp>
 
 #include "Vector2D.hpp"
@@ -7,6 +8,7 @@
 #include "tomiyama.hpp"
 #include "simple.hpp"
 #include "properties.hpp"
+#include "flow_properties.hpp"
 
 Walls wall_overlap(Vector x, double radius, Walls walls);
 
@@ -28,9 +30,10 @@ Vector acceleration_drag(Vector particle_velocity,
 
 Vector acceleration_gravity(double rho_p, double rho_l, Vector g);
 
+//Vector acceleration_lift();
+
 std::vector<Vector> apply_accelerations(std::vector<Vector>& position,
                                         std::vector<Vector>& velocity,
-                                        std::vector<Vector>& flow_velocity,
                                         std::vector<double>& radius,
                                         std::vector<double>& mass,
                                         double rho_p,
@@ -41,6 +44,8 @@ std::vector<Vector> apply_accelerations(std::vector<Vector>& position,
                                         double sigma,
                                         Walls walls,
                                         double dt,
+                                        std::string flow_type,
+                                        std::vector<double> parameters,
                                         bool drag,
                                         bool gravity,
                                         bool particle_collisions,
@@ -53,7 +58,6 @@ void integrate_rk4(std::vector<Vector>& x_n,
                    std::vector<Vector>& x,
                    std::vector<Vector>& u,
                    double dt,
-                   std::vector<Vector>& flow_velocity,
                    std::vector<double>& radius,
                    std::vector<double>& mass,
                    double rho_p,
@@ -63,6 +67,8 @@ void integrate_rk4(std::vector<Vector>& x_n,
                    Vector g,
                    double sigma,
                    Walls walls,
+                   std::string flow_type,
+                   std::vector<double> parameters,
                    bool drag,
                    bool gravity,
                    bool particle_collisions,
@@ -73,7 +79,6 @@ void integrate_euler(std::vector<Vector>& x_n,
                      std::vector<Vector>& x,
                      std::vector<Vector>& u,
                      double dt,
-                     std::vector<Vector>& flow_velocity,
                      std::vector<double>& radius,
                      std::vector<double>& mass,
                      double rho_p,
@@ -83,6 +88,8 @@ void integrate_euler(std::vector<Vector>& x_n,
                      Vector g,
                      double sigma,
                      Walls walls,
+                     std::string flow_type,
+                     std::vector<double> parameters,
                      bool drag,
                      bool gravity,
                      bool particle_collisions,

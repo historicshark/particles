@@ -132,7 +132,6 @@ def main():
     coordinates, connectivity, background_flow = calculate_background_flow(xmin, xmax, ymin, ymax, nx, ny, flow_type, parameters)
 
     np.savetxt('r.csv', radius, delimiter=',')
-#    np.savetxt('rho_p.csv', rho_p, delimiter=',')
     np.savetxt('x.csv', x, delimiter=',')
     np.savetxt('u.csv', u, delimiter=',')
     np.savetxt('coor.csv', coordinates, delimiter=',')
@@ -493,8 +492,6 @@ def particle_properties(n_particles, diameter, diameter_stddev, diameter_min, rh
     rng = np.random.default_rng()
     rp = rng.normal(diameter / 2, diameter_stddev / 2, (n_particles,))
     rp[rp < diameter_min / 2] = diameter_min / 2
-
-#    rho_p = np.full((n_particles,), rho_p)
 
     return rp, rho_p
 

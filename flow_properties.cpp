@@ -37,3 +37,13 @@ Vector interpolate_flow_properties_fast(Vector x, std::string flow_type, std::ve
     }
     return flow_velocity;
 }
+
+double curl_of_velocity(Vector x, std::string flow_type, std::vector<double> parameters)
+{
+    double spatial_step = 1e-5;
+    Vector dx = {spatial_step, 0};
+    Vector dy = {0, spatial_step};
+    double dvdx = (interpolate_flow_properties_fast(x + dx, flow_type, parameters)[1] - interpolate_flow_properties_fast(x - dx, flow_type, parameters)[1]) / (2. * spatial_step);
+    double dudy = (interpolate_flow_properties_fast(x + dy, flow_type, parameters)[0] - interpolate_flow_properties_fast(x - dy, flow_type, parameters)[0]) / (2. * spatial_step);
+    return dvdx - dudy;
+}

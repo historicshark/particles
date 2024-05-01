@@ -135,11 +135,6 @@ void calculate(double dt,
     std::vector<std::tuple<size_t, size_t>> contact_list;
     std::vector<double> contact_time_list;
     
-    std::vector<Vector> flow_velocity(u.size());
-    std::transform(x.cbegin(), x.cend(), flow_velocity.begin(), [flow_type, parameters](const Vector& v){
-        return interpolate_flow_properties_fast(v, flow_type, parameters);
-    });
-    
     std::vector<double> mass(u.size());
     std::transform(radius.cbegin(), radius.cend(), mass.begin(), [rho_p, rho_l](const double& r){
         return calculate_mass(r, rho_p, rho_l);
@@ -147,6 +142,7 @@ void calculate(double dt,
     
     for (double t = 0; t < end_time; t += dt)
     {
+        std::vector<Vector> flow_velocity(x.size());
         std::transform(x.begin(), x.end(), flow_velocity.begin(), [flow_type, parameters](Vector& v){
             return interpolate_flow_properties_fast(v, flow_type, parameters);
         });
@@ -158,7 +154,6 @@ void calculate(double dt,
         std::vector<double> new_mass;
         std::vector<Vector> new_position;
         std::vector<Vector> new_velocity;
-        std::vector<Vector> new_flow_velocity;
         for (auto [we, eo, pos, vel, r, u_l] : ranges::views::zip(weber, eotvos, x, u, radius, flow_velocity))
         {
             we = weber_number(rho_l, vel - u_l, r, sigma);
@@ -171,16 +166,14 @@ void calculate(double dt,
                 new_position.push_back(new_pos);
                 new_velocity.push_back(vel);
                 new_mass.push_back(calculate_mass(new_r2, rho_p, rho_l));
-                new_flow_velocity.push_back(interpolate_flow_properties_fast(new_pos, flow_type, parameters));
             }
         }
         if (!new_radius.empty())
         {
-            for (const auto [new_r, new_pos, new_vel, new_m, new_u_l] : ranges::views::zip(new_radius,
-                                                                                           new_position,
-                                                                                           new_velocity,
-                                                                                           new_mass,
-                                                                                           new_flow_velocity))
+            for (const auto [new_r, new_pos, new_vel, new_m] : ranges::views::zip(new_radius,
+                                                                                  new_position,
+                                                                                  new_velocity,
+                                                                                  new_mass))
             {
                 radius.push_back(new_r);
                 x_n.push_back(new_pos);
@@ -188,7 +181,6 @@ void calculate(double dt,
                 u_n.push_back(new_vel);
                 u.push_back(new_vel);
                 mass.push_back(new_m);
-                flow_velocity.push_back(new_u_l);
             }
             
             update_particle_contact(x, radius, contact_list, contact_time_list, 0);
@@ -220,7 +212,6 @@ void calculate(double dt,
                 u_n[*it] = u_n.back();
                 radius[*it] = radius.back();
                 mass[*it] = mass.back();
-                flow_velocity[*it] = flow_velocity.back();
                 
                 x.pop_back();
                 x_n.pop_back();
@@ -228,7 +219,6 @@ void calculate(double dt,
                 u_n.pop_back();
                 radius.pop_back();
                 mass.pop_back();
-                flow_velocity.pop_back();
             }
         }
         
@@ -239,7 +229,6 @@ void calculate(double dt,
                       x,
                       u,
                       dt,
-                      flow_velocity,
                       radius,
                       mass,
                       rho_p,
@@ -249,6 +238,8 @@ void calculate(double dt,
                       g,
                       sigma,
                       walls,
+                      flow_type,
+                      parameters,
                       drag,
                       gravity,
                       particle_collisions,
@@ -291,8 +282,6 @@ void calculate(double dt,
         x_n = x;
         u_n = u;
     }
-    std::cout << "#\n-------------------------\n";
-    
     std::for_each(x.cbegin(), x.cend(), [&position_file](const Vector& v){position_file << v.string() << ",";});
     position_file << "\n";
     
@@ -314,6 +303,8 @@ void calculate(double dt,
     }
     
     results_file << ke << "," << pe << "\n";
+    
+    std::cout << "#\n-------------------------\n";
 }
 
 int main(int argc, char* argv[])

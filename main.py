@@ -566,10 +566,10 @@ def calculate_background_flow(xmin, xmax, ymin, ymax, nx, ny, flow_type, paramet
 
 
 def animate(tracked_var: str, xmin, xmax, ymin, ymax) -> None:
-    time = np.loadtxt('t.csv')
-    position = np.genfromtxt('position.csv', delimiter=',')[:, :-1]
+    time = np.loadtxt('time.csv')
+    position = pd.read_csv('position.csv').to_numpy()[:, :-1]
     results = np.genfromtxt('results.csv', delimiter=',')
-    rp = np.genfromtxt('radius.csv', delimiter=',')[:, :-1]
+    rp = pd.read_csv('radius.csv').to_numpy()[:, :-1]
 
     fig, (ax, ax_bar) = plt.subplots(2, 1, height_ratios=[10, 1])
     wall_x = (xmin, xmax, xmax, xmin, xmin)
@@ -586,7 +586,10 @@ def animate(tracked_var: str, xmin, xmax, ymin, ymax) -> None:
     particles = []
     for i, radius in enumerate(rp[0]):
         x_particle, y_particle = particle_xy_plot(i, radius, 0)
-        particles.append(ax.plot(x_particle, y_particle, '-k')[0])
+        if np.isnan(radius):
+            particles.append(ax.plot(x_particle, y_particle, '-w')[0])
+        else:
+            particles.append(ax.plot(x_particle, y_particle, '-k')[0])
     ax.axis('equal')
     ax.set(xlim=(xmin, xmax), ylim=(xmin, ymax))
 

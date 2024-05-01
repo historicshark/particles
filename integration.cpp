@@ -24,9 +24,9 @@ bool detect_particle_contact(Vector position1, Vector position2, double radius1,
     return distance < radius1 + radius2;
 }
 
-std::vector<std::array<size_t, 2>> new_particle_contact_list(const std::vector<Vector>& position, const std::vector<double>& radius)
+std::vector<std::tuple<size_t, size_t>> new_particle_contact_list(const std::vector<Vector>& position, const std::vector<double>& radius)
 {
-    std::vector<std::array<size_t, 2>> particle_contact;
+    std::vector<std::tuple<size_t, size_t>> particle_contact;
     for (size_t i = 0; i != position.size(); i++)
     {
         for (size_t j = i + 1; j != position.size(); j++)
@@ -84,8 +84,6 @@ std::vector<Vector> apply_accelerations(std::vector<Vector>& position,
 {
     std::vector<Vector> acceleration(position.size());
     
-    auto contact_list = new_particle_contact_list(position, radius);
-    
     for (auto [a, x, u, r, m, u_l] : ranges::views::zip(acceleration, position, velocity, radius, mass, flow_velocity))
     {
         if (drag)
@@ -103,13 +101,15 @@ std::vector<Vector> apply_accelerations(std::vector<Vector>& position,
             a += acceleration_wall_collision_simple(wall_collision, overlap, x, u, r, m, mu_p, mu_l, sigma);
         }
     }
-    for (auto contact_pair : contact_list)
+    if (particle_collisions)
     {
-        auto i = contact_pair[0];
-        auto j = contact_pair[1];
-//        std::cout << i << " " << j << std::endl;
-        acceleration[i] += acceleration_particle_collision_simple(position[i], position[j], velocity[i], radius[i], radius[j], mass[i], mu_l, mu_p, sigma);
-        acceleration[j] += acceleration_particle_collision_simple(position[j], position[i], velocity[j], radius[j], radius[i], mass[j], mu_l, mu_p, sigma);
+        auto contact_list = new_particle_contact_list(position, radius);
+        for (auto [i,j] : contact_list)
+        {
+            //        std::cout << i << " " << j << std::endl;
+            acceleration[i] += acceleration_particle_collision_simple(position[i], position[j], velocity[i], radius[i], radius[j], mass[i], mu_l, mu_p, sigma);
+            acceleration[j] += acceleration_particle_collision_simple(position[j], position[i], velocity[j], radius[j], radius[i], mass[j], mu_l, mu_p, sigma);
+        }
     }
     return acceleration;
 }
@@ -173,5 +173,35 @@ void integrate_rk4(std::vector<Vector>& x_n,
     for (size_t i = 0; i != x.size(); i++)
     {
         x[i] = x_n[i] + dt * (u_n[i] + 2 * (u_n2[i] + u_n3[i]) + u_n4[i]) / 6;
+    }
+}
+
+void integrate_euler(std::vector<Vector>& x_n,
+                     std::vector<Vector>& u_n,
+                     std::vector<Vector>& x,
+                     std::vector<Vector>& u,
+                     double dt,
+                     std::vector<Vector>& flow_velocity,
+                     std::vector<double>& radius,
+                     std::vector<double>& mass,
+                     double rho_p,
+                     double rho_l,
+                     double mu_l,
+                     double mu_p,
+                     Vector g,
+                     double sigma,
+                     Walls walls,
+                     bool drag,
+                     bool gravity,
+                     bool particle_collisions,
+                     bool wall_collisions)
+{
+    auto k1u = apply_accelerations(x_n, u_n,
+                                   flow_velocity, radius, mass, rho_p, rho_l, mu_l, mu_p, g, sigma, walls, dt, drag, gravity, particle_collisions, wall_collisions);
+    
+    for (auto [x_n_, u_n_, x_, u_, k1u_] : ranges::views::zip(x_n, u_n, x, u, k1u))
+    {
+        u_ = u_n_ + dt * k1u_;
+        x_ = 0.5 * k1u_ * dt * dt + u_ * dt + x_n_;
     }
 }

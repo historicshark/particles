@@ -14,7 +14,7 @@ WallContact detect_wall_contact(Walls overlap);
 
 bool detect_particle_contact(Vector position1, Vector position2, double radius1, double radius2);
 
-std::vector<std::array<size_t, 2>> new_particle_contact_list(const std::vector<Vector>& position, const std::vector<double>& radius);
+std::vector<std::tuple<size_t, size_t>> new_particle_contact_list(const std::vector<Vector>& position, const std::vector<double>& radius);
 
 Vector acceleration_drag(Vector particle_velocity,
                          Vector flow_velocity,
@@ -67,3 +67,23 @@ void integrate_rk4(std::vector<Vector>& x_n,
                    bool gravity,
                    bool particle_collisions,
                    bool wall_collisions);
+
+void integrate_euler(std::vector<Vector>& x_n,
+                     std::vector<Vector>& u_n,
+                     std::vector<Vector>& x,
+                     std::vector<Vector>& u,
+                     double dt,
+                     std::vector<Vector>& flow_velocity,
+                     std::vector<double>& radius,
+                     std::vector<double>& mass,
+                     double rho_p,
+                     double rho_l,
+                     double mu_l,
+                     double mu_p,
+                     Vector g,
+                     double sigma,
+                     Walls walls,
+                     bool drag,
+                     bool gravity,
+                     bool particle_collisions,
+                     bool wall_collisions);

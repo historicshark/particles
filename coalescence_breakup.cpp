@@ -47,3 +47,13 @@ std::tuple<double, Vector> coalesced_bubble_radius_and_velocity(double r1, doubl
     Vector u_new = (d13 * u1 + d23 * u2) / (d13 + d23);
     return {r_new, u_new};
 }
+
+bool detect_coalescence(double r1, double r2, double rho_l, double sigma, double t_contact)
+{
+    double deq = equivalent_diameter(r1, r2);
+    if (t_contact > drainage_time(deq, rho_l, sigma))
+    {
+        return true;
+    }
+    return false;
+}

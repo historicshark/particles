@@ -21,3 +21,5 @@ double equivalent_diameter(double r1, double r2);
 double drainage_time(double deq, double rho_l, double sigma);
 
 std::tuple<double, Vector> coalesced_bubble_radius_and_velocity(double r1, double r2, Vector u1, Vector u2);
+
+bool detect_coalescence(double r1, double r2, double rho_l, double sigma, double t_contact);

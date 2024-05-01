@@ -7,6 +7,7 @@
 #include <string>
 #include <sstream>
 #include <algorithm>
+#include <tuple>
 
 #include <range/v3/view/zip.hpp>
 
@@ -20,17 +21,21 @@
 #include "coalescence_breakup.hpp"
 
 
-void update_particle_contact(const std::vector<Vector>& position, const std::vector<double>& radius, std::vector<std::array<size_t, 2>>& contact_list, std::vector<double>& contact_time_list, double dt)
+void update_particle_contact(const std::vector<Vector>& position,
+                             const std::vector<double>& radius,
+                             std::vector<std::tuple<size_t, size_t>>& contact_list,
+                             std::vector<double>& contact_time_list,
+                             double dt)
 {
     for (size_t i = 0; i != position.size(); i++)
     {
         for (size_t j = i + 1; j != position.size(); j++)
         {
-            std::array<size_t, 2> elem = {i,j};
+            auto elem = std::make_tuple(i,j);
             auto in_list_it = std::find(contact_list.begin(), contact_list.end(), elem);
             bool in_list = in_list_it != contact_list.end();
             bool are_colliding = detect_particle_contact(position[i], position[j], radius[i], radius[j]);
-            if (in_list && are_colliding)
+            if (in_list)
             {
                 size_t loc = std::distance(contact_list.begin(), in_list_it);
                 if (are_colliding)
@@ -45,7 +50,7 @@ void update_particle_contact(const std::vector<Vector>& position, const std::vec
                     contact_time_list.pop_back();
                 }
             }
-            else if (!in_list && are_colliding)
+            else if (are_colliding)
             {
                 contact_list.push_back(elem);
                 contact_time_list.push_back(0);
@@ -71,7 +76,7 @@ void calculate(double dt,
                bool wall_collisions,
                bool particle_collisions)
 {
-    std::cout << "_________________________\n";
+    std::cout << "-------------------------\n";
     std::vector<double> radius;
     std::vector<Vector> x;
     std::vector<Vector> u;
@@ -118,13 +123,16 @@ void calculate(double dt,
     auto t_save = linspace(0., end_time, n_frames);
     auto t_save_it = t_save.cbegin();
     
+    auto t_loadbar = linspace(0., end_time, 25);
+    auto t_loadbar_it = t_loadbar.cbegin();
+    
     std::ofstream position_file("position.csv");
     std::ofstream velocity_file("velocity.csv");
     std::ofstream results_file("results.csv");
     std::ofstream radius_file("radius.csv");
-    std::ofstream time_file("t.csv");
+    std::ofstream time_file("time.csv");
     
-    std::vector<std::array<size_t, 2>> contact_list;
+    std::vector<std::tuple<size_t, size_t>> contact_list;
     std::vector<double> contact_time_list;
     
     std::vector<Vector> flow_velocity(u.size());
@@ -147,8 +155,10 @@ void calculate(double dt,
         std::vector<double> weber(x.size());
         std::vector<double> eotvos(x.size());
         std::vector<double> new_radius;
+        std::vector<double> new_mass;
         std::vector<Vector> new_position;
         std::vector<Vector> new_velocity;
+        std::vector<Vector> new_flow_velocity;
         for (auto [we, eo, pos, vel, r, u_l] : ranges::views::zip(weber, eotvos, x, u, radius, flow_velocity))
         {
             we = weber_number(rho_l, vel - u_l, r, sigma);
@@ -160,20 +170,67 @@ void calculate(double dt,
                 new_radius.push_back(new_r2);
                 new_position.push_back(new_pos);
                 new_velocity.push_back(vel);
+                new_mass.push_back(calculate_mass(new_r2, rho_p, rho_l));
+                new_flow_velocity.push_back(interpolate_flow_properties_fast(new_pos, flow_type, parameters));
             }
         }
         if (!new_radius.empty())
         {
-            for (const auto [new_r, new_pos, new_vel] : ranges::views::zip(new_radius, new_position, new_velocity))
+            for (const auto [new_r, new_pos, new_vel, new_m, new_u_l] : ranges::views::zip(new_radius,
+                                                                                           new_position,
+                                                                                           new_velocity,
+                                                                                           new_mass,
+                                                                                           new_flow_velocity))
             {
                 radius.push_back(new_r);
                 x_n.push_back(new_pos);
                 x.push_back(new_pos);
                 u_n.push_back(new_vel);
                 u.push_back(new_vel);
+                mass.push_back(new_m);
+                flow_velocity.push_back(new_u_l);
             }
+            
+            update_particle_contact(x, radius, contact_list, contact_time_list, 0);
         }
         
+        // Evaluate coalescence
+        std::vector<size_t> particles_to_remove;
+        for (auto [contact_pair, t_contact] : ranges::views::zip(contact_list, contact_time_list))
+        {
+            auto [i,j] = contact_pair;
+            if (detect_coalescence(radius[i], radius[j], rho_l, sigma, t_contact))
+            {
+                auto [r_new, u_new] = coalesced_bubble_radius_and_velocity(radius[i], radius[j], u[i], u[j]);
+                radius[i] = r_new;
+                u[i] = u_new;
+                u_n[i] = u_new;
+                mass[i] = calculate_mass(r_new, rho_p, rho_l);
+                particles_to_remove.push_back(j);
+            }
+        }
+        if (!particles_to_remove.empty())
+        {
+            std::sort(particles_to_remove.begin(), particles_to_remove.end());
+            for (auto it = particles_to_remove.rbegin(); it != particles_to_remove.rend(); it++)
+            {
+                x[*it] = x.back();
+                x_n[*it] = x_n.back();
+                u[*it] = u.back();
+                u_n[*it] = u_n.back();
+                radius[*it] = radius.back();
+                mass[*it] = mass.back();
+                flow_velocity[*it] = flow_velocity.back();
+                
+                x.pop_back();
+                x_n.pop_back();
+                u.pop_back();
+                u_n.pop_back();
+                radius.pop_back();
+                mass.pop_back();
+                flow_velocity.pop_back();
+            }
+        }
         
         update_particle_contact(x, radius, contact_list, contact_time_list, dt);
         
@@ -199,8 +256,13 @@ void calculate(double dt,
 
         if (t > *t_save_it)
         {
+            if (t > *t_loadbar_it)
+            {
+                std::cout << "#" << std::flush;
+                t_loadbar_it++;
+            }
+            
             t_save_it++;
-            std::cout << "t = " << t << "\t" << contact_list.size() << " " << x[0].string() << std::endl;
             
             std::for_each(x.cbegin(), x.cend(), [&position_file](const Vector& v){position_file << v.string() << ",";});
             position_file << "\n";
@@ -229,6 +291,29 @@ void calculate(double dt,
         x_n = x;
         u_n = u;
     }
+    std::cout << "#\n-------------------------\n";
+    
+    std::for_each(x.cbegin(), x.cend(), [&position_file](const Vector& v){position_file << v.string() << ",";});
+    position_file << "\n";
+    
+    std::for_each(u.cbegin(), u.cend(), [&velocity_file](const Vector& v){velocity_file << v.string() << ",";});
+    velocity_file << "\n";
+    
+    std::for_each(radius.cbegin(), radius.cend(), [&radius_file](const double& r){radius_file << r << ",";});
+    radius_file << "\n";
+    
+    time_file << end_time << "\n";
+    
+    double ke = 0;
+    double pe = 0;
+    
+    for (auto [pos, vel, m] : ranges::views::zip(x, u, mass))
+    {
+        ke += kinetic_energy(vel, m);
+        pe += potential_energy(m, g, pos, walls[2]);
+    }
+    
+    results_file << ke << "," << pe << "\n";
 }
 
 int main(int argc, char* argv[])

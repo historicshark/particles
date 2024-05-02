@@ -5,6 +5,7 @@ import pandas as pd
 import argparse
 import csv
 import subprocess
+import platform
 
 from setup import setup
 from animate import animate
@@ -18,7 +19,12 @@ def main():
     save_animation = args.save
     
     setup(test_case)
-    subprocess.run('./particles_xcode')
+    
+    if platform.system() == 'Windows':
+        subprocess.run('particles.exe')
+    elif platform.system() == 'Darwin':
+        subprocess.run('./particles_xcode')
+    
     animate('', save_animation)
     return
 

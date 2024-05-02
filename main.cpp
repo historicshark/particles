@@ -75,7 +75,8 @@ void calculate(double dt,
                bool gravity,
                bool wall_collisions,
                bool particle_collisions,
-               bool lift)
+               bool lift,
+               bool breakup)
 {
     std::cout << "-------------------------\n";
     std::vector<double> radius;
@@ -149,42 +150,44 @@ void calculate(double dt,
         });
         
         // Evaluate breakup
-        std::vector<double> weber(x.size());
-        std::vector<double> eotvos(x.size());
-        std::vector<double> new_radius;
-        std::vector<double> new_mass;
-        std::vector<Vector> new_position;
-        std::vector<Vector> new_velocity;
-        for (auto [we, eo, pos, vel, r, u_l] : ranges::views::zip(weber, eotvos, x, u, radius, flow_velocity))
-        {
-            we = weber_number(rho_l, vel - u_l, r, sigma);
-            eo = eotvos_number(g, rho_p, rho_l, r, sigma);
-            if (detect_breakup(we, eo))
+        if (breakup){
+            std::vector<double> weber(x.size());
+            std::vector<double> eotvos(x.size());
+            std::vector<double> new_radius;
+            std::vector<double> new_mass;
+            std::vector<Vector> new_position;
+            std::vector<Vector> new_velocity;
+            for (auto [we, eo, pos, vel, r, u_l] : ranges::views::zip(weber, eotvos, x, u, radius, flow_velocity))
             {
-                auto [new_r1, new_r2, new_pos] = breakup_radii_and_new_position(r, pos);
-                r = new_r1;
-                new_radius.push_back(new_r2);
-                new_position.push_back(new_pos);
-                new_velocity.push_back(vel);
-                new_mass.push_back(calculate_mass(new_r2, rho_p, rho_l));
+                we = weber_number(rho_l, vel - u_l, r, sigma);
+                eo = eotvos_number(g, rho_p, rho_l, r, sigma);
+                if (detect_breakup(we, eo))
+                {
+                    auto [new_r1, new_r2, new_pos] = breakup_radii_and_new_position(r, pos);
+                    r = new_r1;
+                    new_radius.push_back(new_r2);
+                    new_position.push_back(new_pos);
+                    new_velocity.push_back(vel);
+                    new_mass.push_back(calculate_mass(new_r2, rho_p, rho_l));
+                }
             }
-        }
-        if (!new_radius.empty())
-        {
-            for (const auto [new_r, new_pos, new_vel, new_m] : ranges::views::zip(new_radius,
-                                                                                  new_position,
-                                                                                  new_velocity,
-                                                                                  new_mass))
+            if (!new_radius.empty())
             {
-                radius.push_back(new_r);
-                x_n.push_back(new_pos);
-                x.push_back(new_pos);
-                u_n.push_back(new_vel);
-                u.push_back(new_vel);
-                mass.push_back(new_m);
+                for (const auto [new_r, new_pos, new_vel, new_m] : ranges::views::zip(new_radius,
+                                                                                      new_position,
+                                                                                      new_velocity,
+                                                                                      new_mass))
+                {
+                    radius.push_back(new_r);
+                    x_n.push_back(new_pos);
+                    x.push_back(new_pos);
+                    u_n.push_back(new_vel);
+                    u.push_back(new_vel);
+                    mass.push_back(new_m);
+                }
+                
+                update_particle_contact(x, radius, contact_list, contact_time_list, 0);
             }
-            
-            update_particle_contact(x, radius, contact_list, contact_time_list, 0);
         }
         
         // Evaluate coalescence
@@ -306,14 +309,14 @@ void calculate(double dt,
     
     results_file << ke << "," << pe << "\n";
     
-    std::cout << "#\n-------------------------\n\n";
+    std::cout << "#\n-------------------------\n";
 }
 
 int main(int argc, char* argv[])
 {
     double dt, end_time, gx, gy, mu_l, rho_l, sigma, rho_p, mu_p, xmin, xmax, ymin, ymax;
     int n_frames;
-    bool drag, gravity, wall_collisions, particle_collisions, lift;
+    bool drag, gravity, wall_collisions, particle_collisions, lift, breakup;
     std::string flow_type;
     std::vector<double> parameters;
     
@@ -358,6 +361,8 @@ int main(int argc, char* argv[])
     particle_collisions = line != "0";
     std::getline(options_file, line);
     lift = line != "0";
+    std::getline(options_file, line);
+    breakup = line != "0";
     
     std::getline(options_file, flow_type);
     
@@ -388,5 +393,6 @@ int main(int argc, char* argv[])
               gravity,
               wall_collisions,
               particle_collisions,
-              lift);
+              lift,
+              breakup);
 }

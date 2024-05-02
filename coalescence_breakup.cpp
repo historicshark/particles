@@ -14,7 +14,8 @@ bool detect_breakup(double we, double eo)
 double radius_fraction()
 {
     double x = dis(gen);
-    return std::pow(u_distribution_factor * std::pow(x, -0.5) * std::pow(1.0 - x, -0.5), 1./3.);
+//    return std::min(std::abs(std::pow(u_distribution_factor * std::pow(x, -0.5) * std::pow(1.0 - x, -0.5), 1./3.)), 0.95);
+    return 1.5 * std::sqrt(x) * std::sqrt(1. - x);
 }
 
 std::tuple<double, double, Vector> breakup_radii_and_new_position(double r, Vector x)
@@ -24,7 +25,7 @@ std::tuple<double, double, Vector> breakup_radii_and_new_position(double r, Vect
     double r2 = (1.0 - ratio) * r;
     double new_position_magnitude = 1.2 * (r1 + r2);
     Vector vec = {dis(gen), dis(gen)};
-    Vector new_position = new_position_magnitude * vec / vec.norm();
+    Vector new_position = new_position_magnitude * vec / vec.norm() + x;
     return {r1, r2, new_position};
 }
 

@@ -3,11 +3,11 @@ import matplotlib.animation as animation
 import numpy as np
 import pandas as pd
 import argparse
+import csv
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-save', action='store_true', help='Save animation to file')
-    parser.add_argument('-var', help='Variable to plot: ke, pe, me')
     args = parser.parse_args()
     
     save_animation = args.save
@@ -33,70 +33,45 @@ def animate(tracked_var, save_animation):
         xmax = float(f.readline())
         ymin = float(f.readline())
         ymax = float(f.readline())
-    time = np.loadtxt('time.csv')
-    position = pd.read_csv('position.csv').to_numpy()[:, :-1]
-    results = np.genfromtxt('results.csv', delimiter=',')
-    rp = pd.read_csv('radius.csv').to_numpy()[:, :-1]
-
-    fig, (ax, ax_bar) = plt.subplots(2, 1, height_ratios=[10, 1])
+    
     wall_x = (xmin, xmax, xmax, xmin, xmin)
     wall_y = (ymin, ymin, ymax, ymax, ymin)
-    walls = ax.plot(wall_x, wall_y, '')
-
+    
     theta = np.linspace(0, 2 * np.pi)
     cos_theta = np.cos(theta)
     sin_theta = np.sin(theta)
-
-    def particle_xy_plot(i_particle, r, time_step):
-        return r * cos_theta + position[time_step, 2 * i_particle], r * sin_theta + position[time_step, 2 * i_particle + 1]
-
-    particles = []
-    for i, radius in enumerate(rp[0]):
-        x_particle, y_particle = particle_xy_plot(i, radius, 0)
-        if np.isnan(radius):
-            particles.append(ax.plot(x_particle, y_particle, '-w')[0])
-        else:
-            particles.append(ax.plot(x_particle, y_particle, '-k')[0])
-    ax.axis('equal')
-    ax.set(xlim=(xmin, xmax), ylim=(xmin, ymax))
-
-    tracked_var_i = 0
-    if tracked_var == 'ke':
-        tracked_var_i = 0
-    elif tracked_var == 'pe':
-        tracked_var_i = 1
-    elif tracked_var == 'me':
-        tracked_var_i = 2
     
-    if tracked_var:
-        bar, = ax_bar.barh(tracked_var.upper(), results[0, tracked_var_i])
-    # ax_bar.set_xlim(results[:, tracked_var_i].min(), results[:, tracked_var_i].max())
-
-    def update(frame):
-        for i_particle, (r, particle) in enumerate(zip(rp[frame], particles)):
-            x_particle, y_particle = particle_xy_plot(i_particle, r, frame)
-            particle.set_xdata(x_particle)
-            particle.set_ydata(y_particle)
-        if tracked_var:
-            bar.set_width(results[frame, tracked_var_i])
-        return particles
-
-    n_time = len(time)
-    ani = animation.FuncAnimation(fig=fig, func=update, frames=n_time-1, interval=1)
-
-    if tracked_var:
-        fig, ax = plt.subplots()
-        ax.plot(time, results[:, tracked_var_i])
-        ax.set_xlabel('t')
-        ax.set_ylabel(tracked_var.upper())
-        ax.grid()
-
+    fig, ax = plt.subplots(dpi=300)
+    ax.set_ylim(ymin,ymax)
+    ax.axis('equal')
+    
+    artists = []
+    with open('position.csv') as x_file, open('radius.csv') as r_file, open('time.csv') as t_file:
+        x_reader = csv.reader(x_file)
+        r_reader = csv.reader(r_file)
+        t_reader = csv.reader(t_file)
+        
+        for x_row_, r_row_ in zip(x_reader, r_reader):
+            artists_step = []
+            artists_step.append(ax.plot(wall_x, wall_y, 'k-')[0])
+            x_row = [float(x) for x in x_row_[:-1]]
+            r_row = [float(x) for x in r_row_[:-1]]
+            # t_row = [float(x) for x in t_row_[:-1]]
+            for x, y, r in zip(x_row[::2], x_row[1::2], r_row):
+                if np.abs(x) < 10 and np.abs(y) < 10:
+                    x_plot = r * cos_theta + x
+                    y_plot = r * sin_theta + y
+                    artists_step.append(ax.plot(x_plot, y_plot, 'k-')[0])
+            artists.append(artists_step)
+    
+    ani = animation.ArtistAnimation(fig=fig, artists=artists, interval=1)
+    
     if save_animation:
         print('Saving animation...')
         ani.save(filename='animation.gif', writer="pillow")
         if tracked_var:
             fig.savefig('tracked_var.png', dpi=400)
-        print(f"Animation saved")
+        print("Animation saved")
     else:
         plt.show()
 

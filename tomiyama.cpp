@@ -2,7 +2,8 @@
 
 double drag_coefficient_tomiyama_pure(double re, double eo)
 {
-    double cd = std::max(std::min(16. / re * (1. + .15 * std::pow(re,0.687)), 48. / re), 8. / 3. * eo / (eo + 4.));
+//    double cd = std::max(std::min(16. / re * (1. + .15 * std::pow(re,0.687)), 48. / re), 8. / 3. * eo / (eo + 4.));
+    double cd = 24.0 / re * (2.0 / 3.0 + std::pow(12.0 / re + 3.0 / 4.0 * (1 + 3.315 / std::sqrt(re)), -1));
     if (cd > 200)
     {
         cd = 200;

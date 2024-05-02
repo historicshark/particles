@@ -60,7 +60,7 @@ Vector acceleration_drag(Vector particle_velocity,
 
 Vector acceleration_gravity(double rho_p, double rho_l, Vector g)
 {
-    return (rho_p - rho_l) / rho_p * g;
+    return (rho_p - rho_l) / (rho_p + 0.5 * rho_l) * g;
 }
 
 Vector acceleration_lift(double radius, double rho_l, Vector position, Vector velocity, Vector flow_velocity, double rho_p, double sigma, Vector g, double mu_l, std::string flow_type, std::vector<double> parameters)

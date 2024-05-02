@@ -8,6 +8,11 @@ Vector interpolate_flow_properties_fast(Vector x, std::string flow_type, std::ve
         // parameters = [velocity-x]
         flow_velocity = {parameters[0], 0};
     }
+    else if (flow_type == "uniform-vertical")
+    {
+        // parameters = [velocity-y]
+        flow_velocity = {0, parameters[0]};
+    }
     else if (flow_type == "vortex")
     {
         // parameters = [core-diameter, max-tangential-velocity]
@@ -37,7 +42,11 @@ Vector interpolate_flow_properties_fast(Vector x, std::string flow_type, std::ve
     }
     else if (flow_type == "couette")
     {
-        flow_velocity = {parameters[0] * (x[1] - parameters[3]) / (parameters[4] - parameters[3]) + 1. / (2. * parameters[2]) * parameters[1] * (std::pow(x[1] - parameters[3], 2) - (parameters[4] - parameters[3]) * (x[1] - parameters[3])), 0};
+        flow_velocity = {0, parameters[0] * (x[0] - parameters[3]) / (parameters[4] - parameters[3]) + 1. / (2. * parameters[2]) * parameters[1] * (std::pow(x[0] - parameters[3], 2) - (parameters[4] - parameters[3]) * (x[0] - parameters[3]))};
+    }
+    else if (flow_type == "poiseuille")
+    {
+        flow_velocity = {0, parameters[0] * (1 - std::pow((x[0] - parameters[1])/parameters[2], 2))};
     }
     return flow_velocity;
 }

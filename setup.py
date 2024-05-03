@@ -15,7 +15,7 @@ def setup(test_case):
     dt = 1e-5
     end_time = .015
     n_frames = 200
-    n_particles = 1
+    n_particles = 10
     
     drag = True
     particle_collisions = True

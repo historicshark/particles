@@ -24,6 +24,8 @@ def main():
         subprocess.run('particles.exe')
     elif platform.system() == 'Darwin':
         subprocess.run('./particles_xcode')
+    elif platform.system() == 'Linux':
+        subprocess.run('./particles')
     
     animate('', save_animation)
     return

@@ -11,16 +11,7 @@ def main():
     args = parser.parse_args()
     
     save_animation = args.save
-    if args.var:
-        match args.var.lower():
-            case 'ke':
-                tracked_var = 'ke'
-            case 'pe':
-                tracked_var = 'pe'
-            case _:
-                tracked_var = ''
-    else:
-        tracked_var = ''
+    tracked_var = ''
     animate(tracked_var, save_animation)
     return
 

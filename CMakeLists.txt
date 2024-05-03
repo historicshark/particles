@@ -10,3 +10,7 @@ add_executable(particles ${SOURCES})
 target_include_directories(particles PUBLIC "${PROJECT_SOURCE_DIR}" "${PROJECT_BINARY_DIR}")
 add_subdirectory(range-v3)
 target_link_libraries(particles PUBLIC range-v3)
+configure_file(setup.py setup.py)
+configure_file(animate.py animate.py)
+configure_file(run.py run.py)
+
